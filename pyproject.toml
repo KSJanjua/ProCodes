@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "instancedepth"
+version = "0.1.0"
+description = "Reproduction of 'Instance-Level Video Depth in Groups Beyond Occlusions' (ICCV 2025)"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.2",
+    "transformers>=4.44",
+    "numpy",
+    "opencv-python",
+    "PyYAML",
+    "tensorboard",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["instancedepth*"]

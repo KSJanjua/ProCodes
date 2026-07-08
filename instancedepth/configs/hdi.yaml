@@ -1,0 +1,64 @@
+# Phase 1 (Holistic Depth Initialization) -- paper-faithful profile.
+#
+# Disparity auxiliary loss is OFF (loss.disparity_aux_weight: 0.0). This is
+# the config to use for any faithful-reproduction run / comparison against
+# the paper's own numbers.
+
+run_name: "hdi_faithful"
+run_root: "runs"
+seed: 2026
+
+backbone:
+  name: "facebook/dinov2-large"
+  checkpoint_path: "/home/work/intern_storage/Ayush/weights/dinov2_vitl14.safetensors"
+  hook_layers: [7, 15, 23]
+  freeze: false
+  allow_hub_download: false   # set true only if the local checkpoint is unavailable
+
+decoder:
+  target_fractions: [0.125, 0.25, 0.5]
+  patch_kernels: [16, 8, 4]
+  channels_dec: 256
+  channels_attn: 256
+  attn_heads: 8
+  attn_blocks: 1
+
+bins:
+  rd: 5
+  max_depth: 10.0   # must match instancedepth/configs/gid_custom.yaml's max_depth_m
+
+camera:
+  focal_px: null
+  width_px: null
+  source: "unknown"   # not needed while loss.disparity_aux_weight == 0
+
+loss:
+  regression: "silog"
+  silog_lambda: 0.5
+  deep_supervision_weights: [0.5, 0.25]
+  bin_bce_weight: 1.0
+  disparity_aux_weight: 0.0   # faithful baseline: off
+
+data:
+  annotations_root: "gid_custom"
+  image_size: [728, 1288]
+  min_instance_px: 64
+  hflip_prob: 0.5
+  color_jitter: 0.0
+
+optim:
+  lr: 1.0e-5
+  backbone_lr_mult: 1.0
+  head_lr_mult: 10.0
+  weight_decay: 0.01
+  total_iters: 55000
+  warmup_iters: 0
+  poly_power: 0.9
+  grad_clip_norm: 1.0
+  precision: "bf16"
+  grad_checkpointing: false
+  batch_size: 4
+  num_workers: 4
+  log_every: 50
+  ckpt_every: 1000
+  eval_every: 2000

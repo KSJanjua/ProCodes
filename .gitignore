@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+build/
+dist/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Reference PDFs (large, not source)
+*.pdf
+
+# Cloned/reference repos pulled during research (not part of this project)
+/Depth-Anything-V2/
+/Video-Depth-Anything/
+/Mask2Former/
+/GID/
+
+# Data, checkpoints, runs, logs (large / machine-specific / regenerable)
+/Dataset/
+/gid_custom/
+/runs/
+/checkpoints/
+*.pth
+*.pt
+*.ckpt
+tb_logs/
+wandb/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

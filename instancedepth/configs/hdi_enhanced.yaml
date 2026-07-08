@@ -1,0 +1,70 @@
+# Phase 1 (Holistic Depth Initialization) -- "enhanced" profile.
+#
+# Identical to hdi.yaml except the canonical-disparity auxiliary loss is
+# turned on. This is a deliberate, documented deviation from the paper (see
+# the plan file SS8) -- never used as the baseline for paper comparisons.
+#
+# REQUIRES real camera intrinsics for this dataset/resolution. focal_px and
+# width_px below are placeholders and MUST be filled in (or resolved from
+# per-sequence dataset metadata) before this profile can be used --
+# HDIConfig.__post_init__ will raise if they're left null while
+# disparity_aux_weight > 0.
+
+run_name: "hdi_enhanced"
+run_root: "runs"
+seed: 2026
+
+backbone:
+  name: "facebook/dinov2-large"
+  checkpoint_path: "/home/work/intern_storage/Ayush/weights/dinov2_vitl14.safetensors"
+  hook_layers: [7, 15, 23]
+  freeze: false
+  allow_hub_download: false
+
+decoder:
+  target_fractions: [0.125, 0.25, 0.5]
+  patch_kernels: [16, 8, 4]
+  channels_dec: 256
+  channels_attn: 256
+  attn_heads: 8
+  attn_blocks: 1
+
+bins:
+  rd: 5
+  max_depth: 10.0
+
+camera:
+  focal_px: null    # FILL IN before use -- see instancedepth/utils/camera.py
+  width_px: 1288    # matches data.image_size's W below; focal_px must be for THIS resolution
+  source: "config"
+
+loss:
+  regression: "silog"
+  silog_lambda: 0.5
+  deep_supervision_weights: [0.5, 0.25]
+  bin_bce_weight: 1.0
+  disparity_aux_weight: 0.2   # enabled
+
+data:
+  annotations_root: "gid_custom"
+  image_size: [728, 1288]
+  min_instance_px: 64
+  hflip_prob: 0.5
+  color_jitter: 0.0
+
+optim:
+  lr: 1.0e-5
+  backbone_lr_mult: 1.0
+  head_lr_mult: 10.0
+  weight_decay: 0.01
+  total_iters: 55000
+  warmup_iters: 0
+  poly_power: 0.9
+  grad_clip_norm: 1.0
+  precision: "bf16"
+  grad_checkpointing: false
+  batch_size: 4
+  num_workers: 4
+  log_every: 50
+  ckpt_every: 1000
+  eval_every: 2000
