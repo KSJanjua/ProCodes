@@ -82,13 +82,19 @@ def test_correction_is_bidirectional():
     decoder_cfg = DecoderConfig()
     bins_cfg = BinRefinementConfig(rd=5, max_depth=10.0)
     torch.manual_seed(0)
+    # batch=4 is plenty: even one sample has ~14k independent spatial
+    # locations, each an independent sample of the correction's sign. (A
+    # much larger batch here was OOM-killed on a real machine -- the finest
+    # feature map alone is B x 256 x 364 x 644 floats.) no_grad() halves
+    # memory since this test only inspects output signs, not gradients.
     features = DepthRangeFeatures(levels=[
-        torch.randn(64, decoder_cfg.channels_attn, 91, 161),
-        torch.randn(64, decoder_cfg.channels_attn, 182, 322),
-        torch.randn(64, decoder_cfg.channels_attn, 364, 644),
+        torch.randn(4, decoder_cfg.channels_attn, 91, 161),
+        torch.randn(4, decoder_cfg.channels_attn, 182, 322),
+        torch.randn(4, decoder_cfg.channels_attn, 364, 644),
     ])
     refinement = IterativeBinRefinement(feat_channels=decoder_cfg.channels_attn, cfg=bins_cfg)
-    trace = refinement(features)
+    with torch.no_grad():
+        trace = refinement(features)
 
     d0, d1 = trace.depths[0], trace.depths[1]
     e0 = d1 - torch.nn.functional.interpolate(d0, size=d1.shape[-2:], mode="bilinear", align_corners=False)

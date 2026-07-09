@@ -56,9 +56,12 @@ class SigLogLoss(nn.Module):
         diff_log = torch.log(target[mask]) - torch.log(pred[mask])
         if diff_log.numel() == 0:
             return pred.sum() * 0.0
-        return torch.sqrt(torch.clamp(
-            diff_log.pow(2).mean() - self.lam * diff_log.mean().pow(2), min=0.0
-        ) + _EPS)
+        # No epsilon inside the sqrt (matching DAv2's util/loss.py exactly),
+        # so SigLog(x, x) == 0 exactly. clamp_min(0) guards only against a
+        # tiny-negative variance from float rounding; in real training the
+        # variance is strictly positive, so the sqrt gradient is well-behaved.
+        variance = diff_log.pow(2).mean() - self.lam * diff_log.mean().pow(2)
+        return torch.sqrt(variance.clamp_min(0.0))
 
 
 class L1Loss(nn.Module):
