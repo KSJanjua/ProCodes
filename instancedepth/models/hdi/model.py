@@ -29,7 +29,7 @@ class HolisticDepthModel(nn.Module):
     def __init__(self, cfg: HDIConfig) -> None:
         super().__init__()
         self.cfg = cfg
-        self.backbone = DINOv2Backbone(cfg.backbone, grad_checkpointing=cfg.optim.grad_checkpointing)
+        self.backbone = DINOv2Backbone(cfg.backbone)
         self.decoder = DepthRangeFeatureDecoder(
             in_channels=self.backbone.embed_dim,
             image_hw=cfg.data.image_size,
