@@ -29,7 +29,7 @@ class BackboneConfig:
     checkpoint_path: Optional[str] = (
         "/home/work/intern_storage/Ayush/weights/dinov2_vitl14.safetensors"
     )                                            # local .safetensors preferred over any download
-    hook_layers: Tuple[int, ...] = (7, 15, 23)   # 0-indexed transformer blocks fed to the decoder
+    hook_layers: Tuple[int, ...] = (5, 14, 23)   # 0-indexed transformer blocks fed to the decoder
     freeze: bool = False                          # paper: encoder is trainable in this stage
     allow_hub_download: bool = False              # explicit opt-in; local checkpoint is preferred (see
                                                   # instancedepth/models/backbone/dinov2_wrapper.py)

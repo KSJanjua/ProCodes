@@ -18,7 +18,7 @@ seed: 2026
 backbone:
   name: "facebook/dinov2-large"
   checkpoint_path: "/home/work/intern_storage/Ayush/weights/dinov2_vitl14.safetensors"
-  hook_layers: [7, 15, 23]
+  hook_layers: [5, 14, 23]
   freeze: false
   allow_hub_download: false
 
