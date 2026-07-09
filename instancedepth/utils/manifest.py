@@ -16,8 +16,6 @@ from typing import Any, Dict, Optional
 
 import torch
 
-from instancedepth.configs.config import HDIConfig
-
 
 def git_commit_hash(repo_root: Path) -> Dict[str, Any]:
     try:
@@ -65,7 +63,10 @@ class RunManifest:
     extra: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def build(cls, cfg: HDIConfig, repo_root: Path, architecture_version: str = "hdi-1.0") -> "RunManifest":
+    def build(cls, cfg: Any, repo_root: Path, architecture_version: str = "hdi-1.0") -> "RunManifest":
+        """``cfg`` is duck-typed -- any dataclass with ``.run_name``,
+        ``.seed``, ``.data.annotations_root`` works (Phase 1's ``HDIConfig``,
+        Phase 2's ``Phase2Config``, ...)."""
         import hashlib
 
         cfg_dict = asdict(cfg)

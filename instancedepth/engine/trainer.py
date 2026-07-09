@@ -19,7 +19,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from instancedepth.configs.config import HDIConfig, OptimConfig
+from instancedepth.configs.config import OptimConfig
 from instancedepth.utils.checkpoint import load_checkpoint, save_checkpoint
 from instancedepth.utils.manifest import RunManifest
 
@@ -58,14 +58,23 @@ class Trainer:
 
     def __init__(
         self,
-        cfg: HDIConfig,
+        cfg: Any,
         model: torch.nn.Module,
         compute_loss: Callable[[torch.nn.Module, Dict[str, Any], torch.device], Dict[str, torch.Tensor]],
         train_loader: DataLoader,
         run_dir: Path,
         eval_fn: Optional[Callable[[torch.nn.Module], Dict[str, float]]] = None,
         device: Optional[torch.device] = None,
+        build_optimizer_fn: Optional[Callable[[torch.nn.Module, Any], torch.optim.Optimizer]] = None,
     ) -> None:
+        """``cfg`` is duck-typed (any dataclass exposing the same ``.optim.*``
+        fields as ``OptimConfig``) so this trainer is reusable across phases
+        with different config trees (Phase 1's ``HDIConfig``, Phase 2's
+        ``Phase2Config``, ...) -- see ``instancedepth/engine/train_phase2.py``
+        for an example passing a custom ``build_optimizer_fn`` because Phase
+        2's backbone lives at a different attribute path than Phase 1's
+        (name-prefix-based param-group splitting isn't one-size-fits-all
+        across differently-structured models)."""
         self.cfg = cfg
         self.model = model
         self.compute_loss = compute_loss
@@ -75,7 +84,8 @@ class Trainer:
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.model.to(self.device)
-        self.optimizer = build_optimizer(self.model, cfg.optim)
+        optimizer_fn = build_optimizer_fn or build_optimizer
+        self.optimizer = optimizer_fn(self.model, cfg.optim)
         self.scheduler = build_scheduler(self.optimizer, cfg.optim)
 
         precision = cfg.optim.precision
