@@ -4,11 +4,12 @@
 # turned on. This is a deliberate, documented deviation from the paper (see
 # the plan file SS8) -- never used as the baseline for paper comparisons.
 #
-# REQUIRES real camera intrinsics for this dataset/resolution. focal_px and
-# width_px below are placeholders and MUST be filled in (or resolved from
-# per-sequence dataset metadata) before this profile can be used --
-# HDIConfig.__post_init__ will raise if they're left null while
-# disparity_aux_weight > 0.
+# camera.focal_px / camera.width_px only ever enter the code as the ratio
+# focal_px/width_px (see instancedepth/utils/camera.py's
+# depth_to_canonical_disparity) -- that ratio is resolution-independent, so
+# these two values just need to come from the SAME reference frame as each
+# other (e.g. both from the native camera calibration); they do NOT need to
+# match data.image_size's resized width below.
 
 run_name: "hdi_enhanced"
 run_root: "runs"
@@ -34,8 +35,8 @@ bins:
   max_depth: 10.0
 
 camera:
-  focal_px: null    # FILL IN before use -- see instancedepth/utils/camera.py
-  width_px: 1288    # matches data.image_size's W below; focal_px must be for THIS resolution
+  focal_px: 860.0
+  width_px: 2208
   source: "config"
 
 loss:
@@ -43,7 +44,7 @@ loss:
   silog_lambda: 0.5
   deep_supervision_weights: [0.5, 0.25]
   bin_bce_weight: 1.0
-  disparity_aux_weight: 0.2   # enabled
+  disparity_aux_weight: 0.5   # enabled
 
 data:
   annotations_root: "gid_custom"
@@ -60,7 +61,7 @@ optim:
   total_iters: 55000
   warmup_iters: 0
   poly_power: 0.9
-  grad_clip_norm: 1.0
+  grad_clip_norm: 2.0
   precision: "bf16"
   grad_checkpointing: false
   batch_size: 4
