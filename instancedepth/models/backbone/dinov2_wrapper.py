@@ -51,6 +51,12 @@ log = logging.getLogger("instancedepth.models.backbone")
 _PRETRAIN_IMAGE_SIZE = 518
 _PATCH_SIZE = 14
 
+# Parameters a feature-extraction DINOv2 checkpoint may legitimately omit and
+# that are never read in our forward pass, so a missing entry is harmless.
+# ``embeddings.mask_token`` is only used for masked-image-modeling
+# pretraining (never triggered here). See load_dinov2_weights below.
+_ALLOWED_MISSING_KEYS = {"embeddings.mask_token"}
+
 # facebook/dinov2-{small,base,large,giant} architecture hyperparameters,
 # matching HF's own convert_dinov2_to_hf.py::get_dinov2_config exactly.
 _SIZE_CONFIGS: Dict[str, Dict[str, object]] = {
@@ -209,20 +215,32 @@ def load_dinov2_weights(model: Dinov2Model, cfg: BackboneConfig) -> None:
             state_dict = _rename_original_dinov2_state_dict(state_dict, model.config)
 
         missing, unexpected = model.load_state_dict(state_dict, strict=False)
-        # position_embeddings is expected to be present and shape-matched at
-        # _PRETRAIN_IMAGE_SIZE; everything else should match exactly.
-        if missing or unexpected:
+        # ``embeddings.mask_token`` is only consumed during masked-image-
+        # modeling pretraining (when ``bool_masked_pos`` is passed to the
+        # backbone). We only ever extract features, so we never pass it and
+        # the token is never read -- a feature-extraction DINOv2 checkpoint
+        # legitimately omits it. Treat it (and any other key in
+        # _ALLOWED_MISSING_KEYS) as harmless; everything else must match.
+        blocking_missing = [k for k in missing if k not in _ALLOWED_MISSING_KEYS]
+        if blocking_missing or unexpected:
             raise RuntimeError(
                 "DINOv2 checkpoint did not load cleanly.\n"
                 f"  checkpoint: {cfg.checkpoint_path}\n"
-                f"  missing keys ({len(missing)}): {missing[:10]}{' ...' if len(missing) > 10 else ''}\n"
+                f"  missing keys ({len(blocking_missing)}): {blocking_missing[:10]}{' ...' if len(blocking_missing) > 10 else ''}\n"
                 f"  unexpected keys ({len(unexpected)}): {unexpected[:10]}{' ...' if len(unexpected) > 10 else ''}\n"
                 "This usually means the checkpoint's size (vits/vitb/vitl/vitg) "
                 "doesn't match backbone.name, or it's in a third naming "
                 "convention this loader doesn't recognize yet. Refusing to "
                 "silently proceed with a partially-initialized backbone."
             )
-        log.info("Loaded DINOv2 weights from local checkpoint '%s'.", cfg.checkpoint_path)
+        if missing:
+            log.info(
+                "Loaded DINOv2 weights from '%s' (ignored harmless missing keys "
+                "never used in feature extraction: %s).",
+                cfg.checkpoint_path, missing,
+            )
+        else:
+            log.info("Loaded DINOv2 weights from local checkpoint '%s'.", cfg.checkpoint_path)
         return
 
     if cfg.allow_hub_download:
