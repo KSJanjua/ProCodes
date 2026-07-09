@@ -91,7 +91,18 @@ class GIDInstanceDepthDataset(Dataset):
         if frame.get("depth_npy"):
             d = np.load(frame["depth_npy"]).astype(np.float32)
         else:
-            d = cv2.imread(frame["depth_png"], cv2.IMREAD_UNCHANGED).astype(np.float32)
+            path = frame["depth_png"]
+            d = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+            if d is None:
+                raise IOError(f"failed to read depth {path}")
+            d = d.astype(np.float32)
+            if d.ndim == 3:
+                # Same encoded-in-channels fallback as
+                # data_engine/depth_io.py's _read_raw -- some depth PNGs in
+                # this dataset are stored as 3-channel; that module already
+                # takes channel 0 for the annotation-generation pass, this
+                # training-time loader just hadn't mirrored it.
+                d = d[..., 0]
         return d * scale
 
     # ------------------------------------------------------------- sample
