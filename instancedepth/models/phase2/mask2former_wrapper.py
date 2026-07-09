@@ -14,11 +14,40 @@ states) instead of HF's internal matcher/criterion class API, which is not
 part of the library's public surface and is more likely to shift between
 versions.
 
-**Field names below are this project's well-informed expectation, not yet
-confirmed by execution** -- run ``scripts/verify_mask2former_api.py`` on the
-Backend.AI server first (see the Phase 2 plan, implementation-order step 1)
-and update ``_QUERY_EMBED_FIELDS`` / the asserts below if the real output
-uses different names.
+**Confirmed by execution** (``scripts/verify_mask2former_api.py``, run
+against the real ``facebook/mask2former-swin-large-coco-instance``
+checkpoint -- see the Phase 2 plan, implementation-order step 1): the full
+``Mask2FormerForUniversalSegmentation`` wrapper's own output (not just the
+underlying bare ``Mask2FormerModel`` trunk) already exposes everything this
+module needs --
+
+- ``transformer_decoder_last_hidden_state``: ``(B, num_queries, hidden_dim)``
+  = ``(1, 200, 256)`` in the verification run -- batch-first, matches
+  ``_QUERY_EMBED_FIELDS``'s first (and, in practice, only-needed) entry.
+  Note ``transformer_decoder_hidden_states`` (the per-layer tuple, second
+  candidate below) is *query-first* -- ``(num_queries, B, hidden_dim)`` --
+  a different axis order from ``..._last_hidden_state``; harmless here only
+  because the shape check below (``shape[1] == num_queries``) correctly
+  rejects it and falls through, but don't assume every field on this output
+  shares one layout.
+- ``class_queries_logits``: ``(B, num_queries, num_classes+1)``,
+  ``masks_queries_logits``: ``(B, num_queries, H/4, W/4)`` pre-sigmoid --
+  exactly as assumed.
+- ``config.hidden_dim`` (256, confirmed present at the top level of
+  ``Mask2FormerConfig`` -- there is no ``decoder_config`` sub-object on this
+  config class at all, unlike some other DETR-family configs).
+
+The load report also shows ``MISSING`` for
+``pixel_level_module.encoder.swin.layernorm.{weight,bias}`` -- confirmed
+harmless (checked directly against ``Mask2FormerPixelLevelModule.forward``
+in the installed ``transformers`` version): the pixel decoder only consumes
+the backbone's ``.feature_maps``, never this layernorm's output, so it has
+zero effect on ``masks_queries_logits``, ``class_queries_logits``, or
+``transformer_decoder_last_hidden_state``. Same category of finding as
+``dinov2_wrapper.py``'s ``embeddings.mask_token`` (present in the report,
+irrelevant to this forward path) -- not suppressed here since HF's own
+``from_pretrained`` only logs it (unlike our custom DINOv2 loader, this
+never raises), so there's nothing to whitelist.
 """
 
 from __future__ import annotations
@@ -136,7 +165,11 @@ class Mask2FormerWrapper(nn.Module):
             ignore_mismatched_sizes=(num_classes is not None),
             local_files_only=local_files_only,
         )
-        self.hidden_dim = config.hidden_dim if hasattr(config, "hidden_dim") else config.decoder_config.hidden_dim
+        # config.hidden_dim (256) is confirmed present directly on
+        # Mask2FormerConfig -- no decoder_config sub-object exists on this
+        # config class, so the previous hasattr-guarded fallback to
+        # config.decoder_config.hidden_dim was unreachable dead code.
+        self.hidden_dim = config.hidden_dim
         self.num_queries = config.num_queries
 
     def forward(self, pixel_values: torch.Tensor) -> RawMask2FormerPrediction:
