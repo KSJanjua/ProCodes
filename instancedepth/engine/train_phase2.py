@@ -129,7 +129,10 @@ def main() -> None:
     run_dir = Path(cfg.run_root) / cfg.run_name
     log.info("run_dir=%s", run_dir)
 
-    model = Phase2Model(checkpoint=cfg.model.checkpoint, num_classes=cfg.model.num_classes)
+    model = Phase2Model(
+        checkpoint=cfg.model.checkpoint, checkpoint_dir=cfg.model.checkpoint_dir,
+        allow_hub_download=cfg.model.allow_hub_download, num_classes=cfg.model.num_classes,
+    )
     matcher = Phase2HungarianMatcher(
         cost_class=cfg.matcher.cost_class, cost_mask=cfg.matcher.cost_mask,
         cost_dice=cfg.matcher.cost_dice, cost_depth=cfg.matcher.cost_depth,

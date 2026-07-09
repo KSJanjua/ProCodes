@@ -4,6 +4,8 @@ DepthLayerHead (Eq. 5-7), producing Phase2Output.
 
 from __future__ import annotations
 
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,10 +16,17 @@ from instancedepth.models.phase2.output import Phase2Output
 
 
 class Phase2Model(nn.Module):
-    def __init__(self, checkpoint: str = "facebook/mask2former-swin-large-coco-instance",
-                 num_classes: int = 1) -> None:
+    def __init__(
+        self,
+        checkpoint: str = "facebook/mask2former-swin-large-coco-instance",
+        checkpoint_dir: Optional[str] = None,
+        allow_hub_download: bool = False,
+        num_classes: int = 1,
+    ) -> None:
         super().__init__()
-        self.backbone_decoder = Mask2FormerWrapper(checkpoint, num_classes=num_classes)
+        self.backbone_decoder = Mask2FormerWrapper(
+            checkpoint, checkpoint_dir=checkpoint_dir, allow_hub_download=allow_hub_download, num_classes=num_classes,
+        )
         self.depth_head = DepthLayerHead(self.backbone_decoder.hidden_dim)
 
     def forward(self, pixel_values: torch.Tensor) -> Phase2Output:

@@ -10,12 +10,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 
 @dataclass
 class Phase2ModelConfig:
-    checkpoint: str = "facebook/mask2former-swin-large-coco-instance"
+    checkpoint: str = "facebook/mask2former-swin-large-coco-instance"   # HF Hub id (arch identity; also the
+                                                                         # fallback weights source if checkpoint_dir is unset)
+    checkpoint_dir: Optional[str] = None    # local directory (e.g. a huggingface-cli/snapshot_download
+                                             # snapshot moved here manually) -- preferred over any network call
+    allow_hub_download: bool = False        # explicit opt-in; local checkpoint_dir is preferred (see
+                                             # instancedepth/models/phase2/mask2former_wrapper.py)
     num_classes: int = 1   # this dataset: "person" only (gid_custom.yaml's category_ids)
 
 

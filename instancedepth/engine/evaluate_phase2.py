@@ -112,7 +112,10 @@ def main() -> None:
     cfg = Phase2Config.from_yaml(args.config)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = Phase2Model(checkpoint=cfg.model.checkpoint, num_classes=cfg.model.num_classes).to(device)
+    model = Phase2Model(
+        checkpoint=cfg.model.checkpoint, checkpoint_dir=cfg.model.checkpoint_dir,
+        allow_hub_download=cfg.model.allow_hub_download, num_classes=cfg.model.num_classes,
+    ).to(device)
     load_checkpoint(Path(args.checkpoint), model, map_location=str(device), restore_rng=False)
 
     loader = build_dataloader(cfg, split=args.split)

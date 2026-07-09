@@ -7,16 +7,45 @@ names.
 This project's own knowledge of the exact output field names
 (`class_queries_logits`, `masks_queries_logits`, `transformer_decoder_last_hidden_state`,
 etc.) is a well-informed expectation, not something verified by running the
-code -- run this script once, on the Backend.AI server (this needs network
-access to the HF Hub the first time, to download the checkpoint), and paste
-the output back so `models/phase2/mask2former_wrapper.py` and
-`models/phase2/output.py` (Phase2Output) can be written against the real,
-confirmed API surface rather than assumed field names.
+code -- run this script once and paste the output back so
+`models/phase2/mask2former_wrapper.py` and `models/phase2/output.py`
+(Phase2Output) can be written against the real, confirmed API surface
+rather than assumed field names.
 
-Usage:
+If the Backend.AI server can reach huggingface.co directly:
 
     python -m scripts.verify_mask2former_api \\
         --checkpoint facebook/mask2former-swin-large-coco-instance
+
+If it's behind a blocking proxy (as observed -- a bare Hub id hangs
+indefinitely with no timeout), download the checkpoint on a machine that
+*does* have Hub access first, exactly as you already did for the DINOv2
+`.safetensors` file:
+
+    pip install "huggingface_hub[cli]"
+    huggingface-cli download facebook/mask2former-swin-large-coco-instance \\
+        --local-dir ./mask2former-swin-large-coco-instance
+
+    # (equivalently, in Python:)
+    #   from huggingface_hub import snapshot_download
+    #   snapshot_download(repo_id="facebook/mask2former-swin-large-coco-instance",
+    #                      local_dir="./mask2former-swin-large-coco-instance")
+
+Then copy the resulting folder (config.json, preprocessor_config.json, and
+the model weights file -- typically a few hundred MB to ~1GB) to the
+Backend.AI server, e.g. next to the DINOv2 weights:
+
+    /home/work/intern_storage/Ayush/weights/mask2former-swin-large-coco-instance/
+
+and point this script at the local folder instead of the Hub id -- this
+uses `local_files_only=True` internally, so it will never attempt a network
+call and cannot hang:
+
+    python -m scripts.verify_mask2former_api \\
+        --checkpoint-dir /home/work/intern_storage/Ayush/weights/mask2former-swin-large-coco-instance
+
+Once confirmed working, put the same local path in
+`instancedepth/configs/phase2_mask2former.yaml`'s `model.checkpoint_dir`.
 """
 
 from __future__ import annotations
@@ -44,15 +73,21 @@ def _describe(name: str, value) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--checkpoint", default="facebook/mask2former-swin-large-coco-instance")
+    ap.add_argument("--checkpoint", default="facebook/mask2former-swin-large-coco-instance",
+                     help="HF Hub id -- only used if --checkpoint-dir is not given")
+    ap.add_argument("--checkpoint-dir", default=None,
+                     help="local directory with a manually-downloaded snapshot; if set, no network "
+                          "call is ever attempted (local_files_only=True)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(message)s")
 
     from transformers import Mask2FormerConfig, Mask2FormerForUniversalSegmentation, Mask2FormerModel
 
-    log.info("=== Loading %s ===", args.checkpoint)
-    full_model = Mask2FormerForUniversalSegmentation.from_pretrained(args.checkpoint)
+    source = args.checkpoint_dir or args.checkpoint
+    local_files_only = args.checkpoint_dir is not None
+    log.info("=== Loading %s (local_files_only=%s) ===", source, local_files_only)
+    full_model = Mask2FormerForUniversalSegmentation.from_pretrained(source, local_files_only=local_files_only)
     full_model.eval()
 
     config: Mask2FormerConfig = full_model.config

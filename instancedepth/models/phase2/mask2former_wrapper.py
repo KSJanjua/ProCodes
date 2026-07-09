@@ -50,14 +50,71 @@ class RawMask2FormerPrediction:
     query_embeddings: torch.Tensor   # (B, N, hidden_dim) -- pre class/mask heads
 
 
+def _resolve_checkpoint_source(
+    checkpoint: str,
+    checkpoint_dir: Optional[str],
+    allow_hub_download: bool,
+) -> tuple[str, bool]:
+    """Mirrors instancedepth/models/backbone/dinov2_wrapper.py's
+    load_dinov2_weights: prefer a local, manually-downloaded snapshot,
+    fail loudly if it's missing rather than silently falling back to a
+    (possibly proxy-blocked, hanging) network call, and only ever touch
+    the network if explicitly opted in.
+
+    Returns (source, local_files_only) where ``source`` is either
+    ``checkpoint_dir`` or the Hub id ``checkpoint``.
+    """
+    import os
+
+    if checkpoint_dir:
+        if not os.path.isdir(checkpoint_dir):
+            raise FileNotFoundError(
+                f"model.checkpoint_dir='{checkpoint_dir}' does not exist. "
+                "Download the checkpoint on a machine with working Hub access "
+                "and copy the folder here -- see scripts/verify_mask2former_api.py's "
+                "module docstring for the exact commands, and "
+                "instancedepth/configs/phase2_mask2former.yaml for where to "
+                "point checkpoint_dir once it's transferred."
+            )
+        # local_files_only=True guarantees zero network calls even for
+        # metadata/etag checks -- this is what actually prevents the hang
+        # you saw (Mask2FormerConfig.from_pretrained on a bare Hub id will
+        # still try to *validate* against the Hub unless told not to).
+        return checkpoint_dir, True
+
+    if not allow_hub_download:
+        raise ValueError(
+            "model.checkpoint_dir is unset and model.allow_hub_download is "
+            "False -- refusing to silently attempt a Hub download (which "
+            "hangs indefinitely behind a blocking proxy, as you saw). Set "
+            "checkpoint_dir to a local snapshot, or set "
+            "allow_hub_download: true if this machine truly has working "
+            "Hub access."
+        )
+    return checkpoint, False
+
+
 class Mask2FormerWrapper(nn.Module):
-    def __init__(self, checkpoint: str = "facebook/mask2former-swin-large-coco-instance",
-                 num_classes: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        checkpoint: str = "facebook/mask2former-swin-large-coco-instance",
+        checkpoint_dir: Optional[str] = None,
+        allow_hub_download: bool = False,
+        num_classes: Optional[int] = None,
+    ) -> None:
         """
         Parameters
         ----------
         checkpoint : HF Hub id of the official COCO instance-segmentation
-            checkpoint.
+            checkpoint (used as the architecture identity always, and as
+            the weights source only if ``checkpoint_dir`` is unset).
+        checkpoint_dir : local directory containing a full snapshot of
+            ``checkpoint`` (config.json, preprocessor_config.json, and the
+            model weights file) -- e.g. downloaded via ``huggingface-cli
+            download`` or ``snapshot_download`` on a machine with working
+            Hub access, then copied over. Preferred over any network call.
+        allow_hub_download : explicit opt-in to download directly from the
+            Hub. Off by default -- see ``_resolve_checkpoint_source``.
         num_classes : if set, reinitializes the classification head for a
             new class count (this dataset: 1 category, ``person`` --
             standard fine-tuning practice, per the Phase 2 plan SS6 step 5).
@@ -67,14 +124,17 @@ class Mask2FormerWrapper(nn.Module):
         super().__init__()
         from transformers import Mask2FormerConfig, Mask2FormerForUniversalSegmentation
 
-        config: Mask2FormerConfig = Mask2FormerConfig.from_pretrained(checkpoint)
+        source, local_files_only = _resolve_checkpoint_source(checkpoint, checkpoint_dir, allow_hub_download)
+
+        config: Mask2FormerConfig = Mask2FormerConfig.from_pretrained(source, local_files_only=local_files_only)
         if num_classes is not None:
             config.num_labels = num_classes
 
         self.model = Mask2FormerForUniversalSegmentation.from_pretrained(
-            checkpoint,
+            source,
             config=config,
             ignore_mismatched_sizes=(num_classes is not None),
+            local_files_only=local_files_only,
         )
         self.hidden_dim = config.hidden_dim if hasattr(config, "hidden_dim") else config.decoder_config.hidden_dim
         self.num_queries = config.num_queries
