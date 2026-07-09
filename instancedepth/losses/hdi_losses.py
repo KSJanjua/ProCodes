@@ -125,17 +125,25 @@ def ordinal_bin_targets(gt_depth: torch.Tensor, rd: int, max_depth: float) -> to
 
 
 class OrdinalBinBCE(nn.Module):
+    """``pred_bins`` must be raw logits (pre-sigmoid) -- see
+    ``instancedepth/models/hdi/bin_heads.py``'s ``OrdinalBinHead`` docstring.
+    Uses ``binary_cross_entropy_with_logits``, not ``binary_cross_entropy``:
+    the latter is unsafe under autocast (PyTorch raises on it directly) when
+    fed an already-sigmoided tensor, and is less numerically stable even
+    outside autocast (computes log(sigmoid(x)) explicitly instead of via the
+    stable log-sum-exp formulation logits-based BCE uses internally)."""
+
     def __init__(self, rd: int, max_depth: float) -> None:
         super().__init__()
         self.rd = rd
         self.max_depth = max_depth
 
-    def forward(self, pred_bins: torch.Tensor, gt_depth: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, pred_bin_logits: torch.Tensor, gt_depth: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         target = ordinal_bin_targets(gt_depth, self.rd, self.max_depth)
-        mask_b = mask.expand_as(pred_bins)
+        mask_b = mask.expand_as(pred_bin_logits)
         if mask_b.sum() == 0:
-            return pred_bins.sum() * 0.0
-        return F.binary_cross_entropy(pred_bins[mask_b], target[mask_b])
+            return pred_bin_logits.sum() * 0.0
+        return F.binary_cross_entropy_with_logits(pred_bin_logits[mask_b], target[mask_b])
 
 
 # --------------------------------------------------------------------------- #

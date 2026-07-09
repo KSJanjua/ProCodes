@@ -11,6 +11,17 @@ softmax** -- see the plan SS5 for why: a softmax reading forces the Eq. 2-4
 correction to be one-directional, which the equations don't support. The
 independent-per-bin-sigmoid reading matches Fu et al.'s ordinal regression
 (DORN, CVPR 2018), directly cited by InstanceDepth (ref [18]).
+
+``OrdinalBinHead`` itself returns **raw logits**, not the sigmoid-activated
+probability. The sigmoid is applied explicitly wherever a probability is
+actually needed (``IterativeBinRefinement``'s R_i computation, Eq. 2) and
+on demand by output consumers (``HolisticDepthOutput.seg_confidence()``).
+Keeping the loss (``losses/hdi_losses.py``'s ``OrdinalBinBCE``) on logits
+via ``binary_cross_entropy_with_logits`` is not just an autocast
+requirement (plain ``binary_cross_entropy`` on an already-sigmoided tensor
+is explicitly unsafe under mixed precision) -- it's also more numerically
+stable in general, since it avoids computing ``log`` of an already-saturated
+sigmoid output.
 """
 
 from __future__ import annotations
@@ -58,12 +69,14 @@ class ConfidenceHead(nn.Module):
 
 class OrdinalBinHead(nn.Module):
     """S_i in Eq. 2-4: independent per-bin sigmoid (ordinal encoding, plan
-    SS5) -- NOT a softmax over mutually-exclusive classes."""
+    SS5) -- NOT a softmax over mutually-exclusive classes.
+
+    Returns raw logits (see module docstring); callers apply ``.sigmoid()``
+    where a probability is actually needed."""
 
     def __init__(self, feat_channels: int, rd: int) -> None:
         super().__init__()
         self.head = _small_conv_head(feat_channels, rd)
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, f_i: torch.Tensor) -> torch.Tensor:
-        return self.sigmoid(self.head(f_i))
+        return self.head(f_i)
