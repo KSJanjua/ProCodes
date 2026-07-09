@@ -268,7 +268,7 @@ class DINOv2Backbone(nn.Module):
     (``cfg.hook_layers``), reshaped to spatial feature maps.
     """
 
-    def __init__(self, cfg: BackboneConfig) -> None:
+    def __init__(self, cfg: BackboneConfig, grad_checkpointing: bool = False) -> None:
         super().__init__()
         self.cfg = cfg
         config = build_dinov2_config(cfg.name)
@@ -283,6 +283,13 @@ class DINOv2Backbone(nn.Module):
             for p in self.model.parameters():
                 p.requires_grad_(False)
             self.model.eval()
+        elif grad_checkpointing:
+            # Recomputes each transformer block's activations during the
+            # backward pass instead of keeping all 24 layers' activations
+            # resident -- the standard HF PreTrainedModel toggle. Only
+            # meaningful (and only wired on) when the backbone is
+            # trainable; a frozen backbone has nothing to checkpoint.
+            self.model.gradient_checkpointing_enable()
 
     def train(self, mode: bool = True) -> "DINOv2Backbone":
         super().train(mode)
