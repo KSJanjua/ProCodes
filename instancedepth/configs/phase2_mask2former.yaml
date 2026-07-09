@@ -8,10 +8,10 @@ seed: 2026
 
 model:
   checkpoint: "facebook/mask2former-swin-large-coco-instance"
-  checkpoint_dir: null   # e.g. "/home/work/intern_storage/Ayush/weights/mask2former-swin-large-coco-instance"
-                          # -- a manually-downloaded local snapshot (see scripts/verify_mask2former_api.py's
-                          # docstring for exact download commands). Preferred over any network call; fill
-                          # this in once you've transferred the folder, same pattern as the DINOv2 checkpoint.
+  checkpoint_dir: "/home/work/intern_storage/Ayush/weights/mask2former-swin-large-coco-instance"
+                          # local snapshot, verified loadable via scripts/verify_mask2former_api.py
+                          # on 2026-07-09. Preferred over any network call; same pattern as the DINOv2
+                          # checkpoint. Set back to null only if you move/delete the folder.
   allow_hub_download: false   # set true only if this machine has real (non-proxied) Hub access
   num_classes: 1   # "person", per instancedepth/configs/gid_custom.yaml's category_ids
 
