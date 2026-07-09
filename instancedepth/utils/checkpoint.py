@@ -47,7 +47,13 @@ def load_checkpoint(
     map_location: str = "cpu",
     restore_rng: bool = True,
 ) -> Dict[str, Any]:
-    ckpt = torch.load(path, map_location=map_location)
+    # weights_only=False: these checkpoints are entirely self-authored by
+    # save_checkpoint above (never loaded from an untrusted/external
+    # source), and rng_state()'s numpy.random.get_state() pickles through
+    # numpy._core.multiarray._reconstruct, which PyTorch >=2.6's new
+    # weights_only=True default (torch.load's own default since that
+    # version) does not allowlist.
+    ckpt = torch.load(path, map_location=map_location, weights_only=False)
     model.load_state_dict(ckpt["model"])
     if optimizer is not None and ckpt.get("optimizer") is not None:
         optimizer.load_state_dict(ckpt["optimizer"])
