@@ -82,15 +82,6 @@ class Trainer:
         self.run_dir = run_dir
         self.eval_fn = eval_fn
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        if self.device.type == "cuda":
-            idx = self.device.index if self.device.index is not None else torch.cuda.current_device()
-            props = torch.cuda.get_device_properties(idx)
-            log.info(
-                "training device: cuda:%d (%s, %.2f GiB total) -- pass --device to target a "
-                "different index (see the CUDA_VISIBLE_DEVICES/nvidia-smi ordering caveat in "
-                "train_hdi.py's module docstring if this isn't the card you expected)",
-                idx, props.name, props.total_memory / (1024 ** 3),
-            )
 
         self.model.to(self.device)
         optimizer_fn = build_optimizer_fn or build_optimizer

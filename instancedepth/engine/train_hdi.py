@@ -14,24 +14,6 @@ Usage (on the Backend.AI server, from the project root):
     # resume:
     python -m instancedepth.engine.train_hdi \\
         --config instancedepth/configs/hdi.yaml --resume runs/hdi_faithful/latest.pth
-
-    # explicit GPU selection on a multi-GPU node:
-    python -m instancedepth.engine.train_hdi \\
-        --config instancedepth/configs/hdi.yaml --device cuda:1
-
-CAVEAT on multi-GPU ordering: ``nvidia-smi``'s GPU numbering is PCI-bus
-order, but CUDA's own device enumeration (what ``--device cuda:N`` / the
-``N`` in ``CUDA_VISIBLE_DEVICES=N`` actually indexes) defaults to
-``CUDA_DEVICE_ORDER=FASTEST_FIRST`` and can disagree with it. Don't assume
-``cuda:1`` here means "the card nvidia-smi calls GPU 1" -- run this module
-once and check the logged "training device: cuda:N (<name>, X.XX GiB
-total)" line (see ``Trainer.__init__``) to confirm which physical card you
-actually got, or print each visible device's properties directly:
-
-    python -c "import torch
-for i in range(torch.cuda.device_count()):
-    p = torch.cuda.get_device_properties(i)
-    print(i, p.name, round(p.total_memory / 2**30, 2), 'GiB')"
 """
 
 from __future__ import annotations
@@ -97,10 +79,6 @@ def main() -> None:
     ap.add_argument("--override", nargs="*", default=[], help="dotlist overrides, e.g. optim.total_iters=200")
     ap.add_argument("--run-name", default=None, help="overrides cfg.run_name if set")
     ap.add_argument("--resume", default=None, help="path to a checkpoint (e.g. runs/hdi_faithful/latest.pth)")
-    ap.add_argument("--device", default=None,
-                    help="e.g. cuda:0, cuda:1, cpu -- default: cuda if available, else cpu. "
-                         "See this module's docstring for the nvidia-smi-vs-CUDA ordering caveat "
-                         "on multi-GPU machines.")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
@@ -130,7 +108,6 @@ def main() -> None:
         train_loader=train_loader,
         run_dir=run_dir,
         eval_fn=make_eval_fn(cfg),
-        device=torch.device(args.device) if args.device else None,
     )
     if args.resume:
         trainer.resume(Path(args.resume))
