@@ -28,6 +28,8 @@ from instancedepth.utils.metrics import compute_depth_metrics, compute_disparity
 
 log = logging.getLogger("instancedepth.engine.evaluate_hdi")
 
+_PRECISION_DTYPE = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
+
 
 @torch.no_grad()
 def evaluate(
@@ -43,12 +45,22 @@ def evaluate(
     n_batches = 0
     n_disp_batches = 0
 
+    # Match Trainer.train_step's precision exactly (trainer.py's
+    # _autocast_ctx) -- without this, the forward pass here runs in full
+    # fp32 while training runs it in bf16/fp16, roughly doubling this
+    # model's activation memory for the same batch size/resolution. That
+    # mismatch is what OOM'd on the very first periodic eval call even
+    # though training itself had already run thousands of steps cleanly.
+    precision = cfg.optim.precision
+    use_autocast = precision != "fp32" and device.type == "cuda"
+
     for i, batch in enumerate(loader):
         if max_batches is not None and i >= max_batches:
             break
         image = batch["image"].to(device)
         gt_depth = batch["depth"].to(device)
-        out = model(image)
+        with torch.autocast(device_type=device.type, dtype=_PRECISION_DTYPE[precision], enabled=use_autocast):
+            out = model(image)
         mask = gt_depth > 0
 
         m = compute_depth_metrics(out.depth_final, gt_depth, mask)

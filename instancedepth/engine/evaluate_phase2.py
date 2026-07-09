@@ -31,6 +31,8 @@ from instancedepth.utils.phase2_metrics import aggregate, evaluate_frame, has_ov
 
 log = logging.getLogger("instancedepth.engine.evaluate_phase2")
 
+_PRECISION_DTYPE = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
+
 
 @torch.no_grad()
 def evaluate(
@@ -41,15 +43,24 @@ def evaluate(
     mask_threshold: float = 0.5,
     iou_threshold: float = 0.5,
     max_batches: Optional[int] = None,
+    precision: str = "fp32",
 ) -> Dict[str, Dict[str, float]]:
     model.eval()
     all_frames, occlusion_frames = [], []
+
+    # Match Trainer.train_step's precision (see evaluate_hdi.py's identical
+    # fix) -- forwarding a Swin-L Mask2Former + ViT-scale query heads in
+    # full fp32 during eval, while training runs bf16/fp16, would double
+    # eval's activation memory for no reason and can OOM a process that
+    # trained cleanly for many steps.
+    use_autocast = precision != "fp32" and device.type == "cuda"
 
     for i, batch in enumerate(loader):
         if max_batches is not None and i >= max_batches:
             break
         image = batch["image"].to(device)
-        out = model(image)
+        with torch.autocast(device_type=device.type, dtype=_PRECISION_DTYPE[precision], enabled=use_autocast):
+            out = model(image)
         scores = out.scores()             # (B, N)
         mask_probs = out.mask_confidence()  # (B, N, H, W)
 
@@ -81,7 +92,7 @@ def make_eval_fn(cfg: Phase2Config, max_batches: int = 50):
 
     def eval_fn(model: torch.nn.Module) -> Dict[str, float]:
         device = next(model.parameters()).device
-        result = evaluate(model, val_loader, device, max_batches=max_batches)
+        result = evaluate(model, val_loader, device, max_batches=max_batches, precision=cfg.optim.precision)
         # flatten for TensorBoard scalar logging (Trainer expects Dict[str, float])
         flat = {f"overall_{k}": v for k, v in result["overall"].items()}
         flat.update({f"occlusion_{k}": v for k, v in result["occlusion_slice"].items()})
@@ -120,7 +131,7 @@ def main() -> None:
 
     loader = build_dataloader(cfg, split=args.split)
     result = evaluate(model, loader, device, args.score_threshold, args.mask_threshold,
-                       args.iou_threshold, args.max_batches)
+                       args.iou_threshold, args.max_batches, precision=cfg.optim.precision)
 
     log.info("Evaluation results (%s split, %s):\n%s", args.split, args.checkpoint, json.dumps(result, indent=2))
     out_path = Path(cfg.run_root) / cfg.run_name / f"eval_{args.split}.json"
