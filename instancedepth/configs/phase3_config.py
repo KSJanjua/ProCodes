@@ -104,6 +104,13 @@ class Phase3DataConfig:
     min_instance_px: int = 64
     hflip_prob: float = 0.5
     color_jitter: float = 0.0
+    occlusion_only: bool = False   # train only on frames with >=2 overlapping
+                                   # instances (cheap bbox-overlap proxy, see
+                                   # data/occlusion_index.py). Raises Phase 3's
+                                   # ~5% valid-pair rate so Phi_o actually
+                                   # trains; eval is never filtered. Off by
+                                   # default (faithful: "fine-tune on the
+                                   # dataset"); recommended ON for real runs.
 
     def __post_init__(self) -> None:
         h, w = self.image_size

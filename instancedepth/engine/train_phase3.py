@@ -31,6 +31,7 @@ from torch.utils.data import DataLoader
 
 from instancedepth.configs.phase3_config import Phase3Config
 from instancedepth.data.gid_dataset import GIDDatasetConfig, GIDInstanceDepthDataset, collate_gid
+from instancedepth.data.occlusion_index import occlusion_frame_indices
 from instancedepth.engine.trainer import Trainer
 from instancedepth.losses.phase3_losses import Phase3Criterion
 from instancedepth.models.phase2.matcher import Phase2HungarianMatcher
@@ -83,6 +84,18 @@ def build_dataloader(cfg: Phase3Config, split: str) -> DataLoader:
         size_divisor=cfg.data.size_divisor,   # 32 (Swin-L); depth branch resizes internally
     )
     dataset = GIDInstanceDepthDataset(ds_cfg)
+    if split == "train" and cfg.data.occlusion_only:
+        # Bias training toward frames that can actually form occlusion pairs
+        # (plan SS10.2). Eval (split=="test") is never filtered -- dense
+        # metrics must cover the whole test split.
+        from torch.utils.data import Subset
+        occ = occlusion_frame_indices(dataset, max_depth=cfg.data.max_depth)
+        if not occ:
+            raise RuntimeError(
+                "data.occlusion_only=True but no frames have >=2 overlapping "
+                "instances -- check the annotations / lower the criterion.")
+        log.info("occlusion_only: training on %d / %d frames", len(occ), len(dataset))
+        dataset = Subset(dataset, occ)
     return DataLoader(
         dataset,
         batch_size=cfg.optim.batch_size,
@@ -112,7 +125,13 @@ def make_compute_loss(cfg: Phase3Config, matcher: Phase2HungarianMatcher, criter
         # Hungarian match frozen Phase-2 predictions to GT (for supervision only).
         indices = matcher(p2.class_logits, p2.mask_logits, p2.depth_layers, targets)
         refine_targets = build_dense_gt_rois(aux["pairs"], indices, targets, gt_depth, out_hw, sr)
-        return criterion(output, refine_targets, gt_depth)
+        losses = criterion(output, refine_targets, gt_depth)
+        # Diagnostics (logged by Trainer, not part of `total`): how much
+        # supervision this step actually had. num_valid_pairs == 0 explains a
+        # total==0 step (plan SS10.2 / the observed sparse-pair rate).
+        losses["num_pairs"] = gt_depth.new_tensor(float(len(aux["pairs"])))
+        losses["num_valid_pairs"] = refine_targets.pair_valid.sum().float()
+        return losses
 
     return compute_loss
 

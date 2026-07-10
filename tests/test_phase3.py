@@ -234,3 +234,28 @@ def test_config_loads_and_resolves_subphases():
     assert cfg.phase1 is not None and cfg.phase2 is not None
     assert cfg.head.refine_granularity == "dense"
     assert cfg.optim.lr == 1.0e-6 and cfg.optim.total_iters == 25000
+    assert cfg.data.occlusion_only is False   # faithful default
+
+
+def test_occlusion_frame_indices():
+    from instancedepth.data.occlusion_index import occlusion_frame_indices
+
+    class FakeDS:
+        pass
+
+    def frame(insts):
+        return {"instances": insts}
+
+    def inst(box, d=3.0):
+        return {"bbox_xyxy": box, "depth_layer_m": d}
+
+    man = {"frames": {
+        "f_overlap": frame([inst([0, 0, 10, 10]), inst([5, 5, 15, 15])]),   # overlap -> selected
+        "f_disjoint": frame([inst([0, 0, 5, 5]), inst([20, 20, 30, 30])]),  # no overlap
+        "f_single": frame([inst([0, 0, 10, 10])]),                          # <2 instances
+        "f_invalid_depth": frame([inst([0, 0, 10, 10], d=0.0), inst([5, 5, 15, 15], d=0.0)]),  # dropped (no valid depth)
+    }}
+    ds = FakeDS()
+    ds.index = [(man, "f_overlap"), (man, "f_disjoint"), (man, "f_single"), (man, "f_invalid_depth")]
+    sel = occlusion_frame_indices(ds, max_depth=10.0)
+    assert sel == [0]   # only f_overlap qualifies
