@@ -171,13 +171,29 @@ def main() -> None:
     seq_count: dict = {}
 
     written = 0
+    scanned = 0
     for batch in loader:
-        metas = batch["meta"]
-        needed = [b for b in range(len(metas)) if seq_count.get(metas[b]["sequence"], 0) < per_seq_cap]
         if written >= args.num_samples:
             break
+        metas = batch["meta"]
+        scanned += 1
+
+        # Decide which items are worth rendering using GT ONLY (sequence cap
+        # + occlusion check) BEFORE the expensive Mask2Former forward pass.
+        # Occlusion is a GT-only property, so filtering here means batches
+        # with no eligible frames never pay for inference -- this is what
+        # keeps --occlusion-only fast instead of running the model over the
+        # whole split (the earlier version ran the forward first, then
+        # filtered, so a rare-occlusion split cost a full-dataset inference).
+        needed = []
+        for b in range(len(metas)):
+            if seq_count.get(metas[b]["sequence"], 0) >= per_seq_cap:
+                continue
+            if args.occlusion_only and not has_overlapping_instances(batch["targets"][b]["masks"].bool()):
+                continue
+            needed.append(b)
         if not needed:
-            continue   # whole batch is from already-capped sequences -> skip the forward pass
+            continue
 
         image = batch["image"].to(device)
         with torch.no_grad(), torch.autocast(device_type=device.type, dtype=_PRECISION_DTYPE[precision], enabled=use_autocast):
@@ -194,9 +210,6 @@ def main() -> None:
             tgt = batch["targets"][b]
             gt_masks = tgt["masks"].bool()          # (G,H,W) on CPU
             gt_depths = tgt["depths"].cpu().numpy()
-
-            if args.occlusion_only and not has_overlapping_instances(gt_masks):
-                continue
 
             rgb_u8 = _denorm_rgb_u8(image[b].cpu().numpy())
 
@@ -216,8 +229,9 @@ def main() -> None:
 
     writer.close()
     if written == 0 and args.occlusion_only:
-        log.warning("wrote 0 strips -- no frames with >=2 overlapping GT instances were found in the "
-                    "scanned batches. Re-run without --occlusion-only, or raise --num-samples.")
+        log.warning("wrote 0 strips after scanning %d batches -- no frames with >=2 bounding-box-"
+                    "overlapping GT instances were found. Re-run without --occlusion-only, or lower the "
+                    "overlap threshold in phase2_metrics.has_overlapping_instances.", scanned)
     log.info("done: wrote %d strips across %d sequences. Panel order: RGB | GT instances | predicted "
              "instances. Each instance: translucent fill + contour + depth-layer label; drawn "
              "far-to-near (nearest on top). Predictions filtered at score>%.2f, mask prob>%.2f.",

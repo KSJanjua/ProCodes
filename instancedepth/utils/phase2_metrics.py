@@ -33,14 +33,58 @@ def mask_iou_matrix(pred_masks: torch.Tensor, gt_masks: torch.Tensor) -> torch.T
 
 
 @torch.no_grad()
-def has_overlapping_instances(gt_masks: torch.Tensor, iou_threshold: float = 0.0) -> bool:
-    """True if any two GT instances in this frame overlap at all (used to
-    build the occlusion-focused eval slice)."""
-    if gt_masks.shape[0] < 2:
+def _mask_bboxes(masks: torch.Tensor) -> torch.Tensor:
+    """(K,H,W) bool -> (K,4) [x1,y1,x2,y2] float; empty masks -> zeros."""
+    k = masks.shape[0]
+    boxes = torch.zeros(k, 4, dtype=torch.float32)
+    for i in range(k):
+        ys, xs = torch.where(masks[i])
+        if xs.numel() == 0:
+            continue
+        boxes[i] = torch.tensor(
+            [float(xs.min()), float(ys.min()), float(xs.max()) + 1, float(ys.max()) + 1]
+        )
+    return boxes
+
+
+def _box_iomin(a: torch.Tensor, b: torch.Tensor) -> float:
+    """Intersection-over-min-area of two [x1,y1,x2,y2] boxes (1.0 when the
+    smaller box is fully inside the larger -- the right measure for a small
+    instance occluded by a large one, where plain IoU would be tiny)."""
+    ix1, iy1 = torch.maximum(a[0], b[0]), torch.maximum(a[1], b[1])
+    ix2, iy2 = torch.minimum(a[2], b[2]), torch.minimum(a[3], b[3])
+    inter = (ix2 - ix1).clamp_min(0) * (iy2 - iy1).clamp_min(0)
+    area_a = (a[2] - a[0]) * (a[3] - a[1])
+    area_b = (b[2] - b[0]) * (b[3] - b[1])
+    m = torch.minimum(area_a, area_b)
+    return float(inter / m) if float(m) > 0 else 0.0
+
+
+@torch.no_grad()
+def has_overlapping_instances(gt_masks: torch.Tensor, min_box_iomin: float = 0.1) -> bool:
+    """True if any two GT instances plausibly form an occlusion/contact pair.
+
+    IMPORTANT: GT instance masks in this dataset are *modal and disjoint* --
+    every pixel belongs to exactly one instance (via the flattened id-map),
+    so two instances have ~0 mask-IoU even under heavy occlusion. Occlusion
+    therefore does NOT show up as overlapping masks; it shows up as spatially
+    interleaved image regions, i.e. **overlapping bounding boxes**. We detect
+    it via pairwise box intersection-over-min-area (``_box_iomin``), which
+    fires when one instance's box substantially overlaps another's -- exactly
+    the occluder/occludee geometry the paper's occlusion slice cares about.
+
+    (An earlier version tested mask IoU > 0 here, which was structurally
+    guaranteed to return False for disjoint masks -- so the occlusion slice
+    was always empty. See git history.)"""
+    k = gt_masks.shape[0]
+    if k < 2:
         return False
-    iou = mask_iou_matrix(gt_masks.bool(), gt_masks.bool())
-    iou.fill_diagonal_(0.0)
-    return bool((iou > iou_threshold).any())
+    boxes = _mask_bboxes(gt_masks.bool())
+    for i in range(k):
+        for j in range(i + 1, k):
+            if _box_iomin(boxes[i], boxes[j]) > min_box_iomin:
+                return True
+    return False
 
 
 @torch.no_grad()
