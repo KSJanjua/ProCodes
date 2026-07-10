@@ -82,6 +82,7 @@ def build_dataloader(cfg: Phase2Config, split: str) -> DataLoader:
         min_instance_px=cfg.data.min_instance_px,
         hflip_prob=cfg.data.hflip_prob if split == "train" else 0.0,
         color_jitter=cfg.data.color_jitter if split == "train" else 0.0,
+        size_divisor=32,   # Swin-L Mask2Former stride (not DINOv2/14's 14) -- 736x1280 is 32x23 by 32x40
     )
     dataset = GIDInstanceDepthDataset(ds_cfg)
     return DataLoader(

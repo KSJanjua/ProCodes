@@ -41,16 +41,28 @@ IMAGENET_STD = (0.229, 0.224, 0.225)
 class GIDDatasetConfig:
     annotations_root: str                  # output.out_root of the data engine
     split: str = "train"                   # "train" | "test"
-    image_size: Tuple[int, int] = (518, 518)   # (H, W), both divisible by 14
+    image_size: Tuple[int, int] = (518, 518)   # (H, W), both divisible by size_divisor
     max_depth: float = 10.0
     min_instance_px: int = 64              # drop instances smaller than this AFTER resize
     require_valid_depth_layer: bool = True # drop instances with no valid GT depth
     hflip_prob: float = 0.5                # train-time augmentation
     color_jitter: float = 0.0              # 0 disables; e.g. 0.2 for mild jitter
+    # Backbone stride the input resolution must divide cleanly. This is a
+    # *model* constraint, not a data one -- the dataset only resizes -- so
+    # it's parameterized rather than hardcoded: Phase 1's DINOv2/14 needs 14
+    # (default), Phase 2's Swin-L Mask2Former needs 32 (its 4 stages give a
+    # total stride of 32). Each phase's build_dataloader passes the right
+    # value; the deeper decoder/pyramid divisibility (e.g. Phase 1's extra
+    # /8) is enforced separately in each phase's own config __post_init__.
+    size_divisor: int = 14
 
     def __post_init__(self) -> None:
         h, w = self.image_size
-        assert h % 14 == 0 and w % 14 == 0, "image_size must be divisible by 14 (ViT-L/14)"
+        d = self.size_divisor
+        assert h % d == 0 and w % d == 0, (
+            f"image_size {(h, w)} must be divisible by size_divisor={d} "
+            f"(the backbone stride for this phase)"
+        )
 
 
 class GIDInstanceDepthDataset(Dataset):
