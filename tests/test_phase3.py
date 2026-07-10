@@ -61,6 +61,37 @@ def test_build_pairs_filters_low_confidence():
     assert len(pairs) == 0
 
 
+def test_box_iou_catches_modal_disjoint_masks_that_mask_iou_misses():
+    """The empirically-motivated fix: this dataset's GT (and, by inheritance,
+    Phase 2's predicted) masks are modal/disjoint for occluded pairs -- two
+    people who visually overlap can still have ~0 predicted-mask IoU. Box
+    IoU must still catch them; mask IoU must NOT (this is the exact failure
+    mode observed as num_pairs~=0 on a real training run).
+
+    Geometry: instance 0's visible remainder is split into two blobs (e.g.
+    head + legs, as if instance 1 stands in front and covers its torso);
+    instance 1 occupies the region in between. The two instances' actual
+    mask pixels never touch (mask IoU == 0 exactly), but instance 0's
+    bounding box (spanning both its blobs) still overlaps instance 1's box.
+    """
+    H = W = 32
+    ml = torch.full((1, 2, H, W), -10.0)
+    ml[0, 0, 0:6, 10:22] = 10.0     # instance 0, blob 1 ("head")
+    ml[0, 0, 26:32, 10:22] = 10.0   # instance 0, blob 2 ("legs")
+    ml[0, 1, 6:26, 8:24] = 10.0     # instance 1 ("torso", occluder, in between)
+    cl = torch.zeros(1, 2, 2); cl[..., 0] = 3.0
+    dep = torch.tensor([[3.0, 2.0]])   # instance 1 (occluder) is nearer
+    p2 = Phase2Output(ml, cl, dep, torch.zeros(1, 2, 8), (H, W))
+
+    cfg_box = Phase3CandidateConfig(overlap_metric="box_iou")
+    pairs_box = build_pairs(p2, cfg_box)
+    assert len(pairs_box) > 0, "box_iou must detect the pair despite disjoint masks"
+
+    cfg_mask = Phase3CandidateConfig(overlap_metric="mask_iou")
+    pairs_mask = build_pairs(p2, cfg_mask)
+    assert len(pairs_mask) == 0, "mask_iou should fail here -- masks never touch (IoU=0)"
+
+
 def test_guest_rule_nearest_depth():
     # q0 overlaps q1 (depth 2.2) and q2 (depth 5.0); nearest to q0(2.0) is q1.
     H = W = 32

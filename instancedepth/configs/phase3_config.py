@@ -44,15 +44,36 @@ class Phase3CandidateConfig:
     dense mask-probability map into one scalar "mask confidence" is not
     defined by the paper -- ``mask_conf_thresh`` is applied to the mean
     foreground probability (see candidates.py). [Reasonable Assumption]
+
+    ``overlap_metric`` -- default "box_iou", NOT "mask_iou" -- addresses a
+    structural issue discovered empirically (num_pairs stayed ~0 across a
+    real training run): GT masks in this dataset are modal and disjoint
+    (data_engine/annotate.py::_flatten_id_map assigns every contested pixel
+    entirely to the nearer instance), so Mask2Former is *trained* on masks
+    that never overlap for occluded pairs -- its predicted masks inherit the
+    same near-zero-overlap property, regardless of confidence. Bounding-box
+    IoU on the predicted boxes doesn't have this problem (two overlapping
+    people's boxes overlap even though their modal masks don't). This
+    mirrors the identical fix already applied to the GT-side occlusion-slice
+    detection in utils/phase2_metrics.py::has_overlapping_instances.
+    "mask_iou" is kept as a configurable alternative in case a future,
+    differently-trained Phase 2 model predicts amodal/soft masks instead.
+    [Reasonable Assumption], empirically motivated.
     """
 
     cat_conf_thresh: float = 0.9       # [Paper Specified]
     mask_conf_thresh: float = 0.8      # [Paper Specified]
     overlap_iou_thresh: float = 0.1    # [Paper Specified]
+    overlap_metric: str = "box_iou"    # "box_iou" (default, see docstring) | "mask_iou"
     mask_binarize_thresh: float = 0.5  # sigmoid->binary cut for IoU/box/score [Reasonable Assumption]
     guest_rule: str = "nearest_depth"  # "nearest_depth" (to main's Dep) [Strongly Inferred]
                                        # | "frontmost" (smallest Dep) -- ablation alt
     max_candidates: int = 50           # safety cap per image after filtering [Reasonable Assumption]
+
+    def __post_init__(self) -> None:
+        assert self.overlap_metric in ("box_iou", "mask_iou"), (
+            f"candidate.overlap_metric must be 'box_iou' or 'mask_iou', got {self.overlap_metric!r}"
+        )
 
 
 @dataclass

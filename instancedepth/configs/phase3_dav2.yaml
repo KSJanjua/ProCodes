@@ -18,6 +18,7 @@ candidate:
   cat_conf_thresh: 0.9
   mask_conf_thresh: 0.8
   overlap_iou_thresh: 0.1
+  overlap_metric: "box_iou"   # see phase3.yaml's comment / Phase3CandidateConfig docstring
   mask_binarize_thresh: 0.5
   guest_rule: "nearest_depth"
   max_candidates: 50

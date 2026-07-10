@@ -17,6 +17,12 @@ candidate:
   cat_conf_thresh: 0.9      # [Paper Specified]
   mask_conf_thresh: 0.8     # [Paper Specified]
   overlap_iou_thresh: 0.1   # [Paper Specified]
+  overlap_metric: "box_iou" # box IoU, not mask IoU -- this dataset's GT (and
+                            # Phase 2's predicted) masks are modal/disjoint for
+                            # occluded pairs, so mask IoU stays ~0 regardless of
+                            # confidence (empirically observed as num_pairs~=0);
+                            # box IoU correctly detects the overlap. See
+                            # Phase3CandidateConfig's docstring.
   mask_binarize_thresh: 0.5
   guest_rule: "nearest_depth"
   max_candidates: 50

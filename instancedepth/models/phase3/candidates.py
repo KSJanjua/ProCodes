@@ -88,12 +88,32 @@ def boxes_and_masks_from_probs(mask_prob: torch.Tensor, binarize_thresh: float):
 
 
 def _pairwise_mask_iou(binary_masks: torch.Tensor) -> torch.Tensor:
-    """(K,H,W) bool -> (K,K) IoU. Vectorized over the flattened masks."""
+    """(K,H,W) bool -> (K,K) IoU. Vectorized over the flattened masks.
+
+    Structurally near-zero for genuinely occluded pairs on this dataset (see
+    Phase3CandidateConfig.overlap_metric's docstring) -- kept only as the
+    configurable "mask_iou" alternative, not the default."""
     m = binary_masks.flatten(1).float()                      # (K, H*W)
     inter = m @ m.t()                                        # (K, K)
     area = m.sum(-1)                                         # (K,)
     union = area[:, None] + area[None, :] - inter
     return inter / union.clamp_min(1.0)
+
+
+def _pairwise_box_iou(boxes_norm: torch.Tensor) -> torch.Tensor:
+    """(K,4) normalized xyxy -> (K,K) IoU. Default overlap metric (see
+    Phase3CandidateConfig.overlap_metric's docstring): unlike predicted mask
+    IoU, box IoU correctly detects two occluding people even though their
+    (modal, disjoint-by-training) predicted masks don't overlap."""
+    x1, y1, x2, y2 = boxes_norm.unbind(-1)                    # each (K,)
+    area = (x2 - x1).clamp_min(0) * (y2 - y1).clamp_min(0)    # (K,)
+    ix1 = torch.max(x1[:, None], x1[None, :])
+    iy1 = torch.max(y1[:, None], y1[None, :])
+    ix2 = torch.min(x2[:, None], x2[None, :])
+    iy2 = torch.min(y2[:, None], y2[None, :])
+    inter = (ix2 - ix1).clamp_min(0) * (iy2 - iy1).clamp_min(0)
+    union = area[:, None] + area[None, :] - inter
+    return inter / union.clamp_min(1e-8)
 
 
 @torch.no_grad()
@@ -123,7 +143,10 @@ def build_pairs(p2: Phase2Output, cfg: Phase3CandidateConfig) -> PairSet:
             top = torch.topk(cat_conf[b, cand], cfg.max_candidates).indices
             cand = cand[top]
 
-        iou = _pairwise_mask_iou(binary[b, cand])            # (C, C)
+        if cfg.overlap_metric == "box_iou":
+            iou = _pairwise_box_iou(boxes[b, cand])          # (C, C)
+        else:
+            iou = _pairwise_mask_iou(binary[b, cand])        # (C, C)
         iou.fill_diagonal_(0.0)
         dep_c = dep[b, cand]                                 # (C,)
 
