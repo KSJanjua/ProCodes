@@ -1,0 +1,72 @@
+# Phase 3 (Occlusion-Aware Depth Refinement) -- run against the CURRENT,
+# already-trained Phase 1 / Phase 2 checkpoints (vanilla-DINOv2 hdi_enhanced +
+# the existing phase2_run), BEFORE the separate DAv2 retrain
+# (configs/phase3_dav2.yaml / scripts/run_dav2_pipeline.sh). Isolated
+# run_name/folder (runs/phase3_current/) so it doesn't collide with either
+# the earlier runs/phase3_smoke/ or the future runs/phase3_dav2/.
+#
+# phase1_config MUST match the config that actually produced
+# phase1_checkpoint's weights (architecture, not loss/camera, is what has to
+# line up) -- hdi_enhanced.yaml is the vanilla-DINOv2 + disparity-aux-0.5
+# profile that produced runs/hdi_enhanced/best.pth.
+
+run_name: "phase3_current"
+run_root: "runs"
+seed: 2026
+
+phase1_config: "instancedepth/configs/hdi_enhanced.yaml"
+phase2_config: "instancedepth/configs/phase2_mask2former.yaml"
+phase1_checkpoint: "runs/hdi_enhanced/best.pth"
+phase2_checkpoint: "runs/phase2_run/best.pth"
+
+candidate:
+  cat_conf_thresh: 0.9
+  mask_conf_thresh: 0.8
+  overlap_iou_thresh: 0.1
+  mask_binarize_thresh: 0.5
+  guest_rule: "nearest_depth"
+  max_candidates: 50
+
+head:
+  roi_size: [28, 28]
+  roi_sampling_ratio: 2
+  refine_granularity: "dense"
+  hidden_dim: 256
+  num_conv: 3
+  use_multiscale_feat: false
+  geom_coord: true
+  geom_global_depth: true
+  geom_mask_logit: true
+
+loss:
+  lambda_obj: 1.0
+  lambda_dist: 0.5
+  silog_lambda: 0.5
+  holistic_weight: 0.0
+  min_valid_roi_px: 16
+
+data:
+  annotations_root: "gid_custom"
+  image_size: [736, 1280]
+  size_divisor: 32
+  max_depth: 10.0
+  min_instance_px: 64
+  hflip_prob: 0.5
+  color_jitter: 0.0
+  occlusion_only: true   # same fix as phase3_dav2.yaml -- flag if you want it off here
+
+optim:
+  lr: 1.0e-6
+  head_lr_mult: 10.0
+  weight_decay: 0.01
+  total_iters: 25000
+  warmup_iters: 0
+  poly_power: 0.9
+  grad_clip_norm: 1.0
+  precision: "bf16"
+  grad_checkpointing: false
+  batch_size: 1
+  num_workers: 4
+  log_every: 50
+  ckpt_every: 1000
+  eval_every: 2000
