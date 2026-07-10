@@ -57,4 +57,5 @@ class HolisticDepthModel(nn.Module):
             seg_levels=trace.bins,            # S_0, S_1, S_2
             image_hw=(H, W),
             feat_hw=tuple(decoder_feats.finest.shape[-2:]),
+            feat_levels=decoder_feats.levels,  # [F_0, F_1, F_2] for Phase 3's optional multi-scale F_obj (contract v1.2)
         )

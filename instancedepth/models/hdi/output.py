@@ -11,16 +11,24 @@ probabilities to raw logits (autocast-safety fix -- see
 ``instancedepth/models/hdi/bin_heads.py``'s ``OrdinalBinHead`` docstring).
 Use ``seg_confidence()`` for the probability, same pattern as
 ``instancedepth/models/phase2/output.py``'s ``Phase2Output.mask_confidence()``.
+
+1.1 -> 1.2: added ``feat_levels`` = the three decoder feature maps
+[F_0, F_1, F_2] at their native (1/8, 1/4, 1/2) resolutions. ``feat_final``
+is unchanged (it aliases F_2). This is additive and backward compatible:
+the field defaults to ``None`` (populated by ``HolisticDepthModel.forward``;
+left ``None`` by any consumer that reconstructs the dataclass without it,
+e.g. ``inference.py``'s resize path). Phase 3's optional multi-scale
+``F_obj`` (``head.use_multiscale_feat``, plan SS3) consumes all three.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 
-CONTRACT_VERSION = "1.1"
+CONTRACT_VERSION = "1.2"
 
 
 @dataclass
@@ -32,6 +40,7 @@ class HolisticDepthOutput:
     seg_levels: List[torch.Tensor]     # [S_0, S_1, S_2] logits, same resolutions as depth_levels[0:3]... (S_i at level i)
     image_hw: Tuple[int, int]          # (H, W) of depth_final/seg_final
     feat_hw: Tuple[int, int]           # (h2, w2) of feat_final
+    feat_levels: Optional[List[torch.Tensor]] = None  # [F_0,F_1,F_2] native (1/8,1/4,1/2) res; F_2 == feat_final
     contract_version: str = CONTRACT_VERSION
 
     def feat_stride(self) -> Tuple[float, float]:

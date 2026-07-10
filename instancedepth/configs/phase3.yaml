@@ -1,0 +1,65 @@
+# Phase 3 (Occlusion-Aware Depth Refinement) -- FAITHFUL profile.
+# Reproduces paper Sec. 4.2.2 / Eq. 8-12 and the Sec. 4.3 "Occlusion-Aware
+# Joint Refinement" training recipe verbatim. See docs/PHASE3_DESIGN.md.
+
+run_name: "phase3_refine"
+run_root: "runs"
+seed: 2026
+
+# Composed phases (loaded from their own YAML so their exact architectures
+# are reproduced). Point these at the trained checkpoints before running.
+phase1_config: "instancedepth/configs/hdi.yaml"
+phase2_config: "instancedepth/configs/phase2_mask2former.yaml"
+phase1_checkpoint: null   # e.g. runs/hdi_faithful/best.pth   (REQUIRED at runtime)
+phase2_checkpoint: null   # e.g. runs/phase2_mask2former/best.pth (REQUIRED at runtime)
+
+candidate:
+  cat_conf_thresh: 0.9      # [Paper Specified]
+  mask_conf_thresh: 0.8     # [Paper Specified]
+  overlap_iou_thresh: 0.1   # [Paper Specified]
+  mask_binarize_thresh: 0.5
+  guest_rule: "nearest_depth"
+  max_candidates: 50
+
+head:
+  roi_size: [28, 28]
+  roi_sampling_ratio: 2
+  refine_granularity: "dense"   # user-approved dense-primary (plan SS5)
+  hidden_dim: 256
+  num_conv: 3
+  use_multiscale_feat: false    # F_obj = F_2 only (faithful default)
+  geom_coord: true
+  geom_global_depth: true
+  geom_mask_logit: true
+
+loss:
+  lambda_obj: 1.0     # sweep target
+  lambda_dist: 0.5    # sweep target
+  silog_lambda: 0.5
+  holistic_weight: 0.0   # faithful: Eq. 12 only (no anti-forgetting aux)
+  min_valid_roi_px: 16
+
+data:
+  annotations_root: "gid_custom"
+  image_size: [736, 1280]   # Phase-2 frame (GT masks + frozen P2 masks + boxes align here)
+  size_divisor: 32
+  max_depth: 10.0
+  min_instance_px: 64
+  hflip_prob: 0.5
+  color_jitter: 0.0
+
+optim:
+  lr: 1.0e-6            # [Paper Specified]
+  head_lr_mult: 10.0
+  weight_decay: 0.01
+  total_iters: 25000   # [Paper Specified]
+  warmup_iters: 0
+  poly_power: 0.9
+  grad_clip_norm: 1.0
+  precision: "bf16"
+  grad_checkpointing: false
+  batch_size: 1
+  num_workers: 4
+  log_every: 50
+  ckpt_every: 1000
+  eval_every: 2000

@@ -1,0 +1,68 @@
+# Phase 3 -- ENHANCED profile. Identical to phase3.yaml except for the two
+# opt-in, flagged deviations (plan SS7.4 / SS3):
+#   * loss.holistic_weight > 0 : anti-forgetting regularizer, keeps the
+#     fine-tuned Phase-1 depth branch from drifting in non-instance regions.
+#   * head.use_multiscale_feat  : F_obj = concat(F_0, F_1, F_2) -- honors the
+#     paper's "multi-scale depth features" wording (needs HolisticDepthOutput
+#     v1.2's feat_levels).
+# Everything else mirrors the faithful profile; ablate against phase3.yaml.
+
+run_name: "phase3_refine_enhanced"
+run_root: "runs"
+seed: 2026
+
+phase1_config: "instancedepth/configs/hdi.yaml"
+phase2_config: "instancedepth/configs/phase2_mask2former.yaml"
+phase1_checkpoint: null
+phase2_checkpoint: null
+
+candidate:
+  cat_conf_thresh: 0.9
+  mask_conf_thresh: 0.8
+  overlap_iou_thresh: 0.1
+  mask_binarize_thresh: 0.5
+  guest_rule: "nearest_depth"
+  max_candidates: 50
+
+head:
+  roi_size: [28, 28]
+  roi_sampling_ratio: 2
+  refine_granularity: "dense"
+  hidden_dim: 256
+  num_conv: 3
+  use_multiscale_feat: true    # DEVIATION (opt-in): true multi-scale F_obj
+  geom_coord: true
+  geom_global_depth: true
+  geom_mask_logit: true
+
+loss:
+  lambda_obj: 1.0
+  lambda_dist: 0.5
+  silog_lambda: 0.5
+  holistic_weight: 0.1   # DEVIATION (opt-in): anti-forgetting regularizer
+  min_valid_roi_px: 16
+
+data:
+  annotations_root: "gid_custom"
+  image_size: [736, 1280]
+  size_divisor: 32
+  max_depth: 10.0
+  min_instance_px: 64
+  hflip_prob: 0.5
+  color_jitter: 0.0
+
+optim:
+  lr: 1.0e-6
+  head_lr_mult: 10.0
+  weight_decay: 0.01
+  total_iters: 25000
+  warmup_iters: 0
+  poly_power: 0.9
+  grad_clip_norm: 1.0
+  precision: "bf16"
+  grad_checkpointing: false
+  batch_size: 1
+  num_workers: 4
+  log_every: 50
+  ckpt_every: 1000
+  eval_every: 2000

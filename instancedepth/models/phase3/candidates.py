@@ -1,0 +1,155 @@
+"""Candidate filtering + occlusion-pair construction (paper Sec. 4.2.2, the
+front-end of "Occlusion Pair Relation Reasoning"; plan SS1 step (a)/(b)).
+
+Reads the frozen Phase-2 predictions and produces, per batch, a flat set of
+occlusion pairs ready for ROIAlign:
+
+    1. Filter queries: category confidence > 0.9 AND mask confidence > 0.8.   [Paper Specified]
+    2. Among survivors, for each MAIN find overlapping candidates (mask
+       IoU > 0.1) and keep the depth-nearest one as the GUEST.                [Paper Specified rule]
+    3. Flatten (main, guest) pairs across the batch with a batch_index.
+
+Everything here is non-differentiable (thresholds / argmin over frozen
+Phase-2 masks), so it runs under no_grad on detached tensors.
+
+The scalar "mask confidence" reduction (paper says only "mask confidence
+> 0.8", not how a dense HxW map becomes one scalar) uses the standard
+Mask2Former mask-quality score: mean sigmoid over the binarized foreground.
+[Reasonable Assumption]
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import List
+
+import torch
+
+from instancedepth.configs.phase3_config import Phase3CandidateConfig
+from instancedepth.models.phase2.output import Phase2Output
+
+
+@dataclass
+class PairSet:
+    """Occlusion pairs flattened across the batch (P total)."""
+
+    batch_index: torch.Tensor   # (P,) long -- which image
+    query_idx: torch.Tensor     # (P,2) long -- [main, guest] query indices into the N Phase-2 queries
+    boxes_norm: torch.Tensor    # (P,2,4) float -- normalized [0,1] xyxy for [main, guest]
+    iou: torch.Tensor           # (P,) float -- main<->guest mask IoU
+
+    def __len__(self) -> int:
+        return int(self.batch_index.shape[0])
+
+    def to(self, device) -> "PairSet":
+        return PairSet(
+            self.batch_index.to(device), self.query_idx.to(device),
+            self.boxes_norm.to(device), self.iou.to(device),
+        )
+
+    @staticmethod
+    def empty(device) -> "PairSet":
+        return PairSet(
+            torch.zeros(0, dtype=torch.long, device=device),
+            torch.zeros(0, 2, dtype=torch.long, device=device),
+            torch.zeros(0, 2, 4, dtype=torch.float32, device=device),
+            torch.zeros(0, dtype=torch.float32, device=device),
+        )
+
+
+def mask_quality_scores(mask_prob: torch.Tensor, binarize_thresh: float) -> torch.Tensor:
+    """(B,N,H,W) sigmoid probs -> (B,N) scalar mask confidence = mean
+    foreground probability over the binarized mask (Mask2Former convention)."""
+    fg = (mask_prob >= binarize_thresh).float()
+    num = (mask_prob * fg).flatten(2).sum(-1)
+    den = fg.flatten(2).sum(-1).clamp_min(1.0)
+    return num / den
+
+
+def boxes_and_masks_from_probs(mask_prob: torch.Tensor, binarize_thresh: float):
+    """(B,N,H,W) -> (binary (B,N,H,W) bool, boxes (B,N,4) normalized xyxy,
+    valid (B,N) bool). Boxes are normalized to [0,1] by (W,H) so downstream
+    ROIAlign is resolution-independent (plan SS6.1). Empty masks -> valid=False,
+    box=zeros."""
+    B, N, H, W = mask_prob.shape
+    binary = mask_prob >= binarize_thresh
+    boxes = mask_prob.new_zeros((B, N, 4))
+    valid = torch.zeros((B, N), dtype=torch.bool, device=mask_prob.device)
+    for b in range(B):
+        for n in range(N):
+            ys, xs = torch.where(binary[b, n])
+            if xs.numel() == 0:
+                continue
+            x1, x2 = xs.min().float(), xs.max().float() + 1.0
+            y1, y2 = ys.min().float(), ys.max().float() + 1.0
+            boxes[b, n] = torch.stack([x1 / W, y1 / H, x2 / W, y2 / H])
+            valid[b, n] = True
+    return binary, boxes, valid
+
+
+def _pairwise_mask_iou(binary_masks: torch.Tensor) -> torch.Tensor:
+    """(K,H,W) bool -> (K,K) IoU. Vectorized over the flattened masks."""
+    m = binary_masks.flatten(1).float()                      # (K, H*W)
+    inter = m @ m.t()                                        # (K, K)
+    area = m.sum(-1)                                         # (K,)
+    union = area[:, None] + area[None, :] - inter
+    return inter / union.clamp_min(1.0)
+
+
+@torch.no_grad()
+def build_pairs(p2: Phase2Output, cfg: Phase3CandidateConfig) -> PairSet:
+    """Filter candidates and build occlusion pairs for a whole batch."""
+    device = p2.mask_logits.device
+    cat_conf = p2.scores()                                   # (B,N)
+    mask_prob = p2.mask_logits.sigmoid()                     # (B,N,H,W)
+    mask_conf = mask_quality_scores(mask_prob, cfg.mask_binarize_thresh)  # (B,N)
+    binary, boxes, box_valid = boxes_and_masks_from_probs(mask_prob, cfg.mask_binarize_thresh)
+    dep = p2.depth_layers                                    # (B,N)
+
+    B, N = cat_conf.shape
+    keep = (cat_conf > cfg.cat_conf_thresh) & (mask_conf > cfg.mask_conf_thresh) & box_valid
+
+    all_bidx: List[int] = []
+    all_pairs: List[torch.Tensor] = []
+    all_boxes: List[torch.Tensor] = []
+    all_iou: List[float] = []
+
+    for b in range(B):
+        cand = torch.where(keep[b])[0]                       # candidate query indices
+        if cand.numel() < 2:
+            continue
+        if cand.numel() > cfg.max_candidates:
+            # keep the highest category-confidence candidates
+            top = torch.topk(cat_conf[b, cand], cfg.max_candidates).indices
+            cand = cand[top]
+
+        iou = _pairwise_mask_iou(binary[b, cand])            # (C, C)
+        iou.fill_diagonal_(0.0)
+        dep_c = dep[b, cand]                                 # (C,)
+
+        for i in range(cand.numel()):
+            overlaps = torch.where(iou[i] > cfg.overlap_iou_thresh)[0]
+            if overlaps.numel() == 0:
+                continue
+            if cfg.guest_rule == "nearest_depth":
+                score = (dep_c[overlaps] - dep_c[i]).abs()
+            else:  # "frontmost": smallest depth among overlappers
+                score = dep_c[overlaps]
+            guest_local = overlaps[torch.argmin(score)]
+
+            q_main = int(cand[i])
+            q_guest = int(cand[guest_local])
+            all_bidx.append(b)
+            all_pairs.append(torch.tensor([q_main, q_guest], dtype=torch.long))
+            all_boxes.append(torch.stack([boxes[b, q_main], boxes[b, q_guest]]))   # (2,4)
+            all_iou.append(float(iou[i, guest_local]))
+
+    if not all_bidx:
+        return PairSet.empty(device)
+
+    return PairSet(
+        batch_index=torch.tensor(all_bidx, dtype=torch.long, device=device),
+        query_idx=torch.stack(all_pairs).to(device),
+        boxes_norm=torch.stack(all_boxes).to(device),
+        iou=torch.tensor(all_iou, dtype=torch.float32, device=device),
+    )
