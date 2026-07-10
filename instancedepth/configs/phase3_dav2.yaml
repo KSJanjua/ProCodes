@@ -1,0 +1,67 @@
+# Phase 3 (Occlusion-Aware Depth Refinement) -- DAv2 pipeline run.
+# Identical to phase3.yaml except: points at the hdi_dav2/phase2_dav2
+# checkpoints, and enables data.occlusion_only (plan: training-time
+# occlusion-biased sampling -- see data/occlusion_index.py) so Phi_o gets a
+# useful gradient on most steps instead of the ~5% valid-pair rate observed
+# with uniform frame sampling.
+
+run_name: "phase3_dav2"
+run_root: "runs"
+seed: 2026
+
+phase1_config: "instancedepth/configs/hdi_dav2.yaml"
+phase2_config: "instancedepth/configs/phase2_dav2.yaml"
+phase1_checkpoint: "runs/hdi_dav2/best.pth"
+phase2_checkpoint: "runs/phase2_dav2/best.pth"
+
+candidate:
+  cat_conf_thresh: 0.9
+  mask_conf_thresh: 0.8
+  overlap_iou_thresh: 0.1
+  mask_binarize_thresh: 0.5
+  guest_rule: "nearest_depth"
+  max_candidates: 50
+
+head:
+  roi_size: [28, 28]
+  roi_sampling_ratio: 2
+  refine_granularity: "dense"
+  hidden_dim: 256
+  num_conv: 3
+  use_multiscale_feat: false
+  geom_coord: true
+  geom_global_depth: true
+  geom_mask_logit: true
+
+loss:
+  lambda_obj: 1.0
+  lambda_dist: 0.5
+  silog_lambda: 0.5
+  holistic_weight: 0.0
+  min_valid_roi_px: 16
+
+data:
+  annotations_root: "gid_custom"
+  image_size: [736, 1280]
+  size_divisor: 32
+  max_depth: 10.0
+  min_instance_px: 64
+  hflip_prob: 0.5
+  color_jitter: 0.0
+  occlusion_only: true   # <-- occlusion-biased training sampler, ON for this run
+
+optim:
+  lr: 1.0e-6
+  head_lr_mult: 10.0
+  weight_decay: 0.01
+  total_iters: 25000
+  warmup_iters: 0
+  poly_power: 0.9
+  grad_clip_norm: 1.0
+  precision: "bf16"
+  grad_checkpointing: false
+  batch_size: 1
+  num_workers: 4
+  log_every: 50
+  ckpt_every: 1000
+  eval_every: 2000

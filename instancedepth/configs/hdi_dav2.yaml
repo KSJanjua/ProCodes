@@ -14,9 +14,12 @@
 # just point backbone.checkpoint_path at the .pth. See
 # instancedepth/models/backbone/dinov2_wrapper.py::_convert_dav2_encoder_state_dict.
 #
-# Disparity aux loss is OFF here (faithful) so this is a clean apples-to-apples
-# comparison against the paper's holistic-stage rows (Table 4 "Baseline+H",
-# Table 5 "2 meter" -- 2 m == this config's rd=5 over max_depth=10).
+# Disparity aux loss is ON (1.2, same investigated near-field addition as
+# hdi_enhanced.yaml) -- NOT a clean apples-to-apples comparison against the
+# paper's holistic-stage rows in that case; drop to 0.0 for that comparison.
+# Camera intrinsics (focal_px/width_px) are REQUIRED whenever
+# disparity_aux_weight > 0 (HDIConfig.__post_init__ asserts this) -- reused
+# verbatim from hdi_enhanced.yaml's values (same physical camera/dataset).
 
 run_name: "hdi_dav2"
 run_root: "runs"
@@ -42,16 +45,16 @@ bins:
   max_depth: 10.0
 
 camera:
-  focal_px: null
-  width_px: null
-  source: "unknown"
+  focal_px: 860.0
+  width_px: 2208
+  source: "config"
 
 loss:
   regression: "silog"
   silog_lambda: 0.5
   deep_supervision_weights: [0.5, 0.25]
   bin_bce_weight: 1.0
-  disparity_aux_weight: 0.0   # faithful baseline: off
+  disparity_aux_weight: 1.2
 
 data:
   annotations_root: "gid_custom"
