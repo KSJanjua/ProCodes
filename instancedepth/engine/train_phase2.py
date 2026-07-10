@@ -98,6 +98,13 @@ def build_dataloader(cfg: Phase2Config, split: str) -> DataLoader:
 
 def make_compute_loss(matcher: Phase2HungarianMatcher, criterion: Phase2Criterion):
     def compute_loss(model: torch.nn.Module, batch: Dict[str, Any], device: torch.device) -> Dict[str, torch.Tensor]:
+        # Trainer moves only self.model to the device; Phase2Criterion is a
+        # separate nn.Module (not a submodule of the model), so its
+        # empty_weight buffer would otherwise stay on CPU and mismatch the
+        # CUDA logits inside F.cross_entropy. Idempotent -- a no-op once the
+        # buffer is already on `device`. (The matcher has no buffers, and
+        # neither module has learnable params, so nothing else needs moving.)
+        criterion.to(device)
         image = batch["image"].to(device, non_blocking=True)
         targets = [
             {k: v.to(device, non_blocking=True) for k, v in t.items() if k != "track_ids"}
