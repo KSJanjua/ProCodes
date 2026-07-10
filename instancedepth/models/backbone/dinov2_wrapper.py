@@ -53,9 +53,16 @@ _PATCH_SIZE = 14
 
 # Parameters a feature-extraction DINOv2 checkpoint may legitimately omit and
 # that are never read in our forward pass, so a missing entry is harmless.
-# ``embeddings.mask_token`` is only used for masked-image-modeling
-# pretraining (never triggered here). See load_dinov2_weights below.
-_ALLOWED_MISSING_KEYS = {"embeddings.mask_token"}
+# - ``embeddings.mask_token``: only used for masked-image-modeling pretraining
+#   (never triggered here).
+# - ``layernorm.{weight,bias}``: HF Dinov2Model's *final* layernorm, applied
+#   only to produce last_hidden_state/pooler. We extract intermediate
+#   hidden_states (the hook layers, pre-final-norm block outputs), so this
+#   final norm is never applied to anything we read. Kept tolerant because a
+#   Depth-Anything-V2 encoder export may not carry it; on the vanilla DINOv2
+#   checkpoint it is present anyway, so this never weakens that path.
+# See load_dinov2_weights below.
+_ALLOWED_MISSING_KEYS = {"embeddings.mask_token", "layernorm.weight", "layernorm.bias"}
 
 # facebook/dinov2-{small,base,large,giant} architecture hyperparameters,
 # matching HF's own convert_dinov2_to_hf.py::get_dinov2_config exactly.
@@ -167,6 +174,64 @@ def _looks_like_original_format(keys: List[str]) -> bool:
     return any(k in keys for k in markers)
 
 
+def _looks_like_dav2_format(keys: List[str]) -> bool:
+    """Depth-Anything-V2 checkpoints bundle a DINOv2 encoder (under a
+    ``pretrained.`` prefix, in original facebookresearch/dinov2 key naming)
+    together with a DPT depth head (under ``depth_head.``) -- e.g.
+    ``pretrained.blocks.0.attn.qkv.weight``, ``depth_head.projects.0.weight``.
+    The ``pretrained.`` prefix is the reliable signature."""
+    return any(k.startswith("pretrained.") for k in keys)
+
+
+def _convert_dav2_encoder_state_dict(
+    state_dict: Dict[str, torch.Tensor], config: Dinov2Config
+) -> Dict[str, torch.Tensor]:
+    """Extract just the DINOv2 encoder from a Depth-Anything-V2 checkpoint
+    and map it into HF ``Dinov2Model`` key naming.
+
+    DAv2 = DINOv2 encoder (fine-tuned for depth, stored under
+    ``pretrained.`` in original DINOv2 key naming) + a DPT depth head
+    (``depth_head.``). We keep only the encoder, strip the prefix, drop the
+    head, then reuse ``_rename_original_dinov2_state_dict`` -- the encoder is
+    architecturally identical to vanilla DINOv2 ViT-L/14, only its weight
+    *values* differ (that's the whole point of using it: depth-fine-tuned
+    features, matching the encoder behind the paper's reported holistic-stage
+    numbers -- see the InstanceDepth paper's Sec. 5.3 ablations)."""
+    encoder: Dict[str, torch.Tensor] = {}
+    dropped_head = 0
+    prefix = "pretrained."
+    for k, v in state_dict.items():
+        if k.startswith(prefix):
+            encoder[k[len(prefix):]] = v
+        elif k.startswith("depth_head."):
+            dropped_head += 1
+        # anything else (rare aux buffers) is intentionally ignored
+    log.info(
+        "Depth Anything V2 checkpoint: extracted %d encoder tensors (from "
+        "'pretrained.'), dropped %d DPT depth-head tensors.",
+        len(encoder), dropped_head,
+    )
+    return _rename_original_dinov2_state_dict(encoder, config)
+
+
+def _read_state_dict(path: str) -> Dict[str, torch.Tensor]:
+    """Load a raw state dict from either a ``.safetensors`` or a
+    ``.pth``/``.pt`` file. The vanilla DINOv2 checkpoint this project uses is
+    ``.safetensors``; DAv2's official checkpoints ship as ``.pth``. Unwraps a
+    top-level ``model``/``state_dict`` holder if the file has one."""
+    import os
+
+    if os.path.splitext(path)[1].lower() in (".safetensors", ".st"):
+        from safetensors.torch import load_file
+        return load_file(path)
+    obj = torch.load(path, map_location="cpu", weights_only=False)
+    if isinstance(obj, dict):
+        for wrapper in ("model", "state_dict"):
+            if wrapper in obj and isinstance(obj[wrapper], dict):
+                return obj[wrapper]
+    return obj
+
+
 def load_dinov2_weights(model: Dinov2Model, cfg: BackboneConfig) -> None:
     """Populate ``model`` in place, preferring ``cfg.checkpoint_path`` and
     only ever touching the network if ``cfg.allow_hub_download`` is True and
@@ -201,12 +266,19 @@ def load_dinov2_weights(model: Dinov2Model, cfg: BackboneConfig) -> None:
                 f"download '{cfg.name}' from the Hugging Face Hub instead."
             )
 
-        from safetensors.torch import load_file
-
-        state_dict = load_file(cfg.checkpoint_path)
+        state_dict = _read_state_dict(cfg.checkpoint_path)
         keys = list(state_dict.keys())
 
-        if _looks_like_original_format(keys):
+        if _looks_like_dav2_format(keys):
+            log.info(
+                "Checkpoint '%s' looks like a Depth Anything V2 checkpoint; "
+                "extracting its DINOv2 encoder (under 'pretrained.') and "
+                "dropping the DPT depth head, then renaming to HF Dinov2Model "
+                "format.",
+                cfg.checkpoint_path,
+            )
+            state_dict = _convert_dav2_encoder_state_dict(state_dict, model.config)
+        elif _looks_like_original_format(keys):
             log.info(
                 "Checkpoint '%s' looks like an original facebookresearch/dinov2 "
                 "state dict; applying key-renaming to HF Dinov2Model format.",
