@@ -43,6 +43,7 @@ from __future__ import annotations
 import argparse
 import colorsys
 import logging
+import math
 from pathlib import Path
 
 import cv2
@@ -124,6 +125,11 @@ def main() -> None:
     ap.add_argument("--checkpoint", required=True, help="e.g. runs/phase2_mask2former/best.pth")
     ap.add_argument("--split", default="test", choices=["train", "test"])
     ap.add_argument("--num-samples", type=int, default=24)
+    ap.add_argument("--max-per-sequence", type=int, default=None,
+                    help="cap frames drawn from any one sequence/video (default: auto -- spread "
+                         "num_samples as evenly as possible across all sequences). The test loader "
+                         "is unshuffled and in-sequence order, so without this all samples come from "
+                         "the first video.")
     ap.add_argument("--score-threshold", type=float, default=0.5, help="keep queries with foreground conf above this")
     ap.add_argument("--mask-threshold", type=float, default=0.5, help="binarize mask probability at this value")
     ap.add_argument("--occlusion-only", action="store_true",
@@ -156,17 +162,35 @@ def main() -> None:
     precision = cfg.optim.precision
     use_autocast = precision != "fp32" and device.type == "cuda"
 
+    # Spread samples across sequences instead of draining the first video
+    # (the test loader is unshuffled and walks one sequence at a time).
+    num_sequences = len({man["sequence"] for man, _ in loader.dataset.index})
+    per_seq_cap = args.max_per_sequence or max(1, math.ceil(args.num_samples / max(num_sequences, 1)))
+    log.info("%s split has %d sequences; taking up to %d %sframe(s) per sequence",
+             args.split, num_sequences, per_seq_cap, "occlusion " if args.occlusion_only else "")
+    seq_count: dict = {}
+
     written = 0
     for batch in loader:
+        metas = batch["meta"]
+        needed = [b for b in range(len(metas)) if seq_count.get(metas[b]["sequence"], 0) < per_seq_cap]
+        if written >= args.num_samples:
+            break
+        if not needed:
+            continue   # whole batch is from already-capped sequences -> skip the forward pass
+
         image = batch["image"].to(device)
         with torch.no_grad(), torch.autocast(device_type=device.type, dtype=_PRECISION_DTYPE[precision], enabled=use_autocast):
             out = model(image)
         scores = out.scores()               # (B,N)
         mask_probs = out.mask_confidence()  # (B,N,H,W)
 
-        for b in range(image.shape[0]):
+        for b in needed:
             if written >= args.num_samples:
                 break
+            seq = metas[b]["sequence"]
+            if seq_count.get(seq, 0) >= per_seq_cap:
+                continue
             tgt = batch["targets"][b]
             gt_masks = tgt["masks"].bool()          # (G,H,W) on CPU
             gt_depths = tgt["depths"].cpu().numpy()
@@ -183,21 +207,21 @@ def main() -> None:
             gt_panel = _overlay_instances(rgb_u8, gt_masks.numpy(), gt_depths)
             pred_panel = _overlay_instances(rgb_u8, pred_masks, pred_depths)
 
+            seq_short = str(seq).replace("/", "-")
             strip = _hstack_u8([rgb_u8, gt_panel, pred_panel])   # (H, 3W+seps, 3) uint8
-            writer.add_image(f"{tag_prefix}/{written:03d}_rgb-gt-pred",
+            writer.add_image(f"{tag_prefix}/{written:03d}_{seq_short}_rgb-gt-pred",
                              strip.transpose(2, 0, 1), global_step=0)   # uint8 CHW
+            seq_count[seq] = seq_count.get(seq, 0) + 1
             written += 1
-        if written >= args.num_samples:
-            break
 
     writer.close()
     if written == 0 and args.occlusion_only:
         log.warning("wrote 0 strips -- no frames with >=2 overlapping GT instances were found in the "
                     "scanned batches. Re-run without --occlusion-only, or raise --num-samples.")
-    log.info("done: wrote %d strips. Panel order: RGB | GT instances | predicted instances. "
-             "Each instance: translucent fill + contour + depth-layer label; drawn far-to-near "
-             "(nearest on top). Predictions filtered at score>%.2f, mask prob>%.2f.",
-             written, args.score_threshold, args.mask_threshold)
+    log.info("done: wrote %d strips across %d sequences. Panel order: RGB | GT instances | predicted "
+             "instances. Each instance: translucent fill + contour + depth-layer label; drawn "
+             "far-to-near (nearest on top). Predictions filtered at score>%.2f, mask prob>%.2f.",
+             written, len(seq_count), args.score_threshold, args.mask_threshold)
 
 
 if __name__ == "__main__":

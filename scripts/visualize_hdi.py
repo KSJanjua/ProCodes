@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 from pathlib import Path
 
 import numpy as np
@@ -98,6 +99,11 @@ def main() -> None:
     ap.add_argument("--checkpoint", required=True, help="e.g. runs/hdi_enhanced/best.pth")
     ap.add_argument("--split", default="test", choices=["train", "test"])
     ap.add_argument("--num-samples", type=int, default=24)
+    ap.add_argument("--max-per-sequence", type=int, default=None,
+                    help="cap frames drawn from any one sequence/video (default: auto -- spread "
+                         "num_samples as evenly as possible across all sequences). The test loader "
+                         "is unshuffled and in-sequence order, so without this all samples come from "
+                         "the first video.")
     ap.add_argument("--cmap", default="turbo", help="matplotlib colormap for depth (turbo/viridis/magma)")
     ap.add_argument("--logdir", default=None,
                     help="TensorBoard output dir (default: <run_root>/<run_name>/viz)")
@@ -125,17 +131,35 @@ def main() -> None:
     precision = cfg.optim.precision
     use_autocast = precision != "fp32" and device.type == "cuda"
 
+    # Spread samples across sequences instead of draining the first video
+    # (the test loader is unshuffled and walks one sequence at a time).
+    num_sequences = len({man["sequence"] for man, _ in loader.dataset.index})
+    per_seq_cap = args.max_per_sequence or max(1, math.ceil(args.num_samples / max(num_sequences, 1)))
+    log.info("%s split has %d sequences; taking up to %d frame(s) per sequence",
+             args.split, num_sequences, per_seq_cap)
+    seq_count: dict = {}
+
     written = 0
     for batch in loader:
+        metas = batch["meta"]
+        needed = [b for b in range(len(metas)) if seq_count.get(metas[b]["sequence"], 0) < per_seq_cap]
+        if written >= args.num_samples:
+            break
+        if not needed:
+            continue   # whole batch is from already-capped sequences -> skip the forward pass
+
         image = batch["image"].to(device)
         gt_depth = batch["depth"].to(device)
         with torch.no_grad(), torch.autocast(device_type=device.type, dtype=_PRECISION_DTYPE[precision], enabled=use_autocast):
             out = model(image)
         pred = out.depth_final.float()
 
-        for b in range(image.shape[0]):
+        for b in needed:
             if written >= args.num_samples:
                 break
+            seq = metas[b]["sequence"]
+            if seq_count.get(seq, 0) >= per_seq_cap:
+                continue
             rgb_np = _denorm_rgb(image[b].cpu().numpy())
             gt_np = gt_depth[b, 0].cpu().numpy()
             pred_np = pred[b, 0].cpu().numpy()
@@ -153,15 +177,16 @@ def main() -> None:
             err_vmax = float(np.percentile(err[valid], 95)) if valid.any() else 1.0
             err_panel = _colorize(err, valid, 0.0, max(err_vmax, 1e-6), err_cmap)
 
+            seq_short = str(seq).replace("/", "-")
             strip = _hstack([rgb_np, gt_panel, pred_panel, err_panel])
-            writer.add_image(f"{args.split}/{written:03d}_rgb-gt-pred-err", strip, global_step=0)
+            writer.add_image(f"{args.split}/{written:03d}_{seq_short}_rgb-gt-pred-err", strip, global_step=0)
+            seq_count[seq] = seq_count.get(seq, 0) + 1
             written += 1
-        if written >= args.num_samples:
-            break
 
     writer.close()
-    log.info("done: wrote %d strips. Panel order per strip: RGB | GT depth | predicted depth | abs error. "
-             "GT and prediction share the same colour scale; invalid GT pixels are black.", written)
+    log.info("done: wrote %d strips across %d sequences. Panel order per strip: RGB | GT depth | "
+             "predicted depth | abs error. GT and prediction share the same colour scale; invalid "
+             "GT pixels are black.", written, len(seq_count))
 
 
 if __name__ == "__main__":
