@@ -1,0 +1,17 @@
+{
+  "run_name": "hdi_enhanced",
+  "phase": 1,
+  "backbone": "vanilla DINOv2 ViT-L/14",
+  "disparity_aux_weight": 0.5,
+  "metrics": {
+    "abs_rel": 0.07822042224355615,
+    "rms": 0.39254297324098075,
+    "rms_log": 0.10967077270150184,
+    "log10": 0.03252952696898809,
+    "sigma1": 0.9333482405199455,
+    "sigma2": 0.9799640453320283,
+    "sigma3": 0.9946283392035045,
+    "disparity_abs_rel": 0.07527846866932053,
+    "disparity_rmse": 0.028501117382055293
+  }
+}

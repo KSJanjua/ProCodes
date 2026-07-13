@@ -1,0 +1,17 @@
+{
+  "run_name": "hdi_dav2",
+  "phase": 1,
+  "backbone": "Depth Anything V2's DINOv2 ViT-L/14 encoder",
+  "disparity_aux_weight": 0.2,
+  "metrics": {
+    "abs_rel": 0.07781042387923942,
+    "rms": 0.3809985600182643,
+    "rms_log": 0.1065035834765205,
+    "log10": 0.031844481997048625,
+    "sigma1": 0.9383272515867765,
+    "sigma2": 0.982127874573836,
+    "sigma3": 0.9956300324201584,
+    "disparity_abs_rel": 0.0721920700550366,
+    "disparity_rmse": 0.02708285529542571
+  }
+}
