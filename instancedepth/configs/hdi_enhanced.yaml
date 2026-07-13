@@ -2,7 +2,8 @@
 #
 # Identical to hdi.yaml except the canonical-disparity auxiliary loss is
 # turned on. This is a deliberate, documented deviation from the paper (see
-# the plan file SS8) -- never used as the baseline for paper comparisons.
+# a deliberate, documented deviation from the paper, never used as the
+# baseline for paper comparisons.
 #
 # camera.focal_px / camera.width_px only ever enter the code as the ratio
 # focal_px/width_px (see instancedepth/utils/camera.py's
@@ -63,7 +64,6 @@ optim:
   poly_power: 0.9
   grad_clip_norm: 2.0
   precision: "bf16"
-  grad_checkpointing: false
   batch_size: 4
   num_workers: 4
   log_every: 50

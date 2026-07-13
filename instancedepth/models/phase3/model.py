@@ -1,14 +1,14 @@
 """Phase3Model -- composes the (fine-tuned) Phase-1 depth branch and the
 (frozen) Phase-2 instance decoder, adds the Occlusion Pair Relation Reasoning
 head Phi_o, and produces occlusion-corrected depth (paper Sec. 4.2.2 / Eq.
-8-12; plan SS1, SS8). See ``docs/PHASE3_DESIGN.md``.
+8-12). See ``docs/PHASE3_DESIGN.md``.
 
 Freeze/train split (paper Sec. 4.3, "Occlusion-Aware Joint Refinement"):
   * Phase 1 (DINOv2 + Depth Range Decoder + Eq.1-4)  : TRAINABLE  (LR 1e-6)
   * Phase 2 (Swin-L Mask2Former + DepthLayerHead)    : FROZEN     (no grad)
   * Phi_o                                            : TRAINABLE  (fresh)
 
-Resolution (plan SS6.1): each branch runs at its own trained resolution;
+Resolution: each branch runs at its own trained resolution;
 ROIAlign reconciles them via normalized boxes. ``forward`` receives RGB at
 the Phase-2 frame (where GT masks/boxes align) and internally resizes for
 the depth branch.
@@ -27,7 +27,7 @@ import torch.nn.functional as F
 from instancedepth.configs.phase3_config import Phase3Config
 from instancedepth.models.hdi.model import HolisticDepthModel
 from instancedepth.models.phase2.model import Phase2Model
-from instancedepth.models.phase3.candidates import PairSet, build_pairs
+from instancedepth.models.phase3.candidates import build_pairs
 from instancedepth.models.phase3.output import RefinedDepthOutput
 from instancedepth.models.phase3.relation_head import (
     OcclusionRelationHead, composite_refined_depth, roi_masked_mean,
@@ -97,7 +97,7 @@ class Phase3Model(nn.Module):
     # ------------------------------------------------------------------ #
     def _build_feat_map(self, p1out) -> torch.Tensor:
         """F_obj source: F_2 alone (faithful) or F_0/F_1/F_2 concatenated
-        (multi-scale, plan SS3). Multi-scale needs contract v1.2 feat_levels."""
+        (multi-scale). Multi-scale needs contract v1.2 feat_levels."""
         if not self.config.head.use_multiscale_feat:
             return p1out.feat_final
         assert p1out.feat_levels is not None, (

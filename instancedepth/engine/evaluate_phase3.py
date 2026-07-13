@@ -1,4 +1,4 @@
-"""Phase 3 evaluation (plan SS10). Dense depth metrics (paper Table 2/3
+"""Phase 3 evaluation. Dense depth metrics (paper Table 2/3
 protocol -- REL, RMS, RMSlog, Log10, sigma1-3) on the **refined** map vs GT,
 reported three ways so the Table-4 ablation logic (H vs H+I) is reproducible:
 

@@ -1,5 +1,5 @@
 """Occlusion Pair Relation Reasoning head Phi_o (paper Eq. 8-9) + the
-non-differentiable composite-back used at inference/eval (plan SS5/SS6.4/SS8.5).
+non-differentiable composite-back used at inference/eval.
 
 Eq. 8:  E_obj = Sigmoid(Phi_o([F_obj, G_obj]))
 Eq. 9:  D_hat = (2 * E_obj - 1) * D_obj + D_obj      # residual multiplicative correction,
@@ -9,7 +9,7 @@ Phi_o couples the pair by concatenating the main + guest per-member channels
 (so both instances jointly determine each other's correction -- genuine
 "relation" reasoning) and emitting a 2-channel error map [E_main, E_guest].
 
-Granularity (plan SS5, user-approved dense-primary):
+Granularity:
   * "dense"  -> E_obj is a per-cell (Hp x Wp) field (Reading D).
   * "scalar" -> E_obj is one value per instance, broadcast over the ROI so
                 Eq. 9 rescales the dense D_obj uniformly (Reading H).

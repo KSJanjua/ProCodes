@@ -1,7 +1,6 @@
 # Phase 3 (Occlusion-Aware Depth Refinement) -- DAv2 pipeline run.
 # Identical to phase3.yaml except: points at the hdi_dav2/phase2_dav2
-# checkpoints, and enables data.occlusion_only (plan: training-time
-# occlusion-biased sampling -- see data/occlusion_index.py) so Phi_o gets a
+# checkpoints, and enables data.occlusion_only so Phi_o gets a
 # useful gradient on most steps instead of the ~5% valid-pair rate observed
 # with uniform frame sampling.
 
@@ -61,7 +60,6 @@ optim:
   poly_power: 0.9
   grad_clip_norm: 1.0
   precision: "bf16"
-  grad_checkpointing: false
   batch_size: 1
   num_workers: 4
   log_every: 50

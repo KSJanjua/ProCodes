@@ -1,4 +1,4 @@
-"""Ground-truth targets for the Phase 3 refinement loss (plan SS7, SS12).
+"""Ground-truth targets for the Phase 3 refinement loss.
 
 Two supervision signals (paper Eq. 10-11):
 
@@ -11,7 +11,7 @@ Two supervision signals (paper Eq. 10-11):
     (masked to the member's matched GT instance) into the same Hp x Wp
     normalized ROI frame as D_hat.
 
-Physics (plan SS0.3): a single RGB-D sensor gives GT only on *visible*
+Physics: a single RGB-D sensor gives GT only on *visible*
 surfaces, so ``dt_valid`` is (GT depth > 0) AND (inside the matched GT
 instance mask). There is no GT for truly-hidden pixels; L_obj is masked
 to visible GT accordingly.

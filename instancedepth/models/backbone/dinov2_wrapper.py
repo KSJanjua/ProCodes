@@ -1,7 +1,6 @@
 """DINOv2 backbone wrapper for the Holistic Depth Initialization model.
 
-Design decisions and their provenance (see the implementation plan, SS3, for
-the full argument):
+Design decisions and their provenance:
 
 - We depend on ``transformers.Dinov2Model`` rather than vendoring the
   original facebookresearch/dinov2 (or Depth-Anything-V2's copy of it) code.
@@ -375,8 +374,7 @@ class DINOv2Backbone(nn.Module):
         tokens reshaped to spatial. All 3 share the same spatial resolution
         (a ViT preserves resolution across depth); they differ in semantic
         depth, which is what makes them a genuine "multiscale" feature set
-        once the decoder resizes each to its own target resolution (SS1/SS4
-        of the plan).
+        once the decoder resizes each to its own target resolution.
         """
         B, _, H, W = pixel_values.shape
         assert H % self.patch_size == 0 and W % self.patch_size == 0, (

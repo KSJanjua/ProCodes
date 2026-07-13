@@ -5,10 +5,8 @@ Follows the same pattern already established in
 ``from_dict``, no external config framework.
 
 Every field that is a genuine research decision (not a paper-stated fact)
-is documented at its point of use in the implementation plan
-(``docs/`` is not duplicated here — see the plan file history for the
-provenance table). This module only defines *what* is configurable, not
-*why* each default was chosen.
+is documented at its point of use; this module only defines *what* is
+configurable, not *why* each default was chosen.
 """
 
 from __future__ import annotations
@@ -21,7 +19,7 @@ from typing import Any, Dict, Optional, Tuple
 @dataclass
 class BackboneConfig:
     """DINOv2 backbone (vanilla, self-supervised checkpoint -- NOT Depth
-    Anything V2's fine-tuned variant; see plan SS3 for why that distinction
+    Anything V2's fine-tuned variant
     matters)."""
 
     name: str = "facebook/dinov2-large"          # HF hub id; used for the model *config* (arch) always,
@@ -70,14 +68,14 @@ class LossConfig:
     regression: str = "silog"                 # registry key: silog | l1 | l2 | berhu
     silog_lambda: float = 0.5                 # Eigen et al. variance-vs-mean trade-off
     deep_supervision_weights: Tuple[float, float] = (0.5, 0.25)   # weight on D_1, D_2 (not D_final)
-    bin_bce_weight: float = 1.0               # ordinal per-bin BCE weight (Sec. plan SS5/SS6)
+    bin_bce_weight: float = 1.0               # ordinal per-bin BCE weight
     disparity_aux_weight: float = 0.0         # 0 = off (faithful); >0 only in hdi_enhanced.yaml
 
 
 @dataclass
 class DataConfig:
     annotations_root: str = "gid_custom"
-    image_size: Tuple[int, int] = (728, 1288)  # (H, W); derived in plan SS2, not inherited from DA-V2
+    image_size: Tuple[int, int] = (728, 1288)  # (H, W); divisible by 14 (DINOv2/14) and 8 (decoder pyramid)
     min_instance_px: int = 64
     hflip_prob: float = 0.5
     color_jitter: float = 0.0                  # off by default; no paper support either way
@@ -94,7 +92,6 @@ class OptimConfig:
     poly_power: float = 0.9       # DAv2's (1 - iter/total)**0.9 schedule
     grad_clip_norm: float = 1.0
     precision: str = "bf16"       # fp32 | fp16 | bf16 -- configurable, not assumed
-    grad_checkpointing: bool = False
     batch_size: int = 4
     num_workers: int = 4
     log_every: int = 50
@@ -120,13 +117,13 @@ class HDIConfig:
         assert h % 14 == 0 and w % 14 == 0, "image_size must be divisible by 14 (DINOv2/14)"
         assert h % 8 == 0 and w % 8 == 0, (
             "image_size must be divisible by 8 so the 1/8, 1/4, 1/2 decoder "
-            "pyramid levels are exact integers (see plan SS2)"
+            "pyramid levels are exact integers"
         )
         if self.loss.disparity_aux_weight > 0:
             assert self.camera.focal_px and self.camera.width_px, (
                 "disparity_aux_weight > 0 requires camera intrinsics "
                 "(camera.focal_px / camera.width_px) to be set -- refusing "
-                "to silently fall back to a guessed constant (see plan SS9)"
+                "to silently fall back to a guessed constant"
             )
 
     # ---------------------------------------------------------------- io

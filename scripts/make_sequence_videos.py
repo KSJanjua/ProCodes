@@ -34,6 +34,7 @@ import cv2
 import numpy as np
 
 from instancedepth.data.gid_dataset import GIDInstanceDepthDataset
+from instancedepth.predict import build_depth_predictor
 from instancedepth.utils.viz import colorize_depth, open_video_writer, put_label
 
 log = logging.getLogger("scripts.make_sequence_videos")
@@ -44,31 +45,6 @@ def _load_rgb(path: str) -> np.ndarray:
     if img is None:
         raise IOError(f"failed to read rgb {path}")
     return img   # BGR
-
-
-def build_inferencer(phase: int, config: str, checkpoint: str, overrides):
-    """Returns (predict_fn: BGR frame -> (H,W) float depth, max_depth)."""
-    if phase == 1:
-        from instancedepth.configs.config import HDIConfig
-        from instancedepth.models.hdi.inference import HDIInferencer
-        cfg = HDIConfig.from_yaml_with_overrides(config, overrides)
-        inf = HDIInferencer(cfg, checkpoint)
-
-        def predict(bgr: np.ndarray) -> np.ndarray:
-            out = inf.predict(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
-            return out.depth_final[0, 0].float().cpu().numpy()
-
-        return predict, cfg.bins.max_depth
-
-    from instancedepth.configs.phase3_config import Phase3Config
-    from instancedepth.models.phase3.inference import Phase3Inferencer
-    cfg = Phase3Config.from_yaml_with_overrides(config, overrides)
-    inf = Phase3Inferencer(cfg, checkpoint)
-
-    def predict(bgr: np.ndarray) -> np.ndarray:
-        return inf.predict(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))["refined"]
-
-    return predict, cfg.data.max_depth
 
 
 def main() -> None:
@@ -90,7 +66,7 @@ def main() -> None:
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-    predict, max_depth = build_inferencer(args.phase, args.config, args.checkpoint, args.override)
+    predict, max_depth = build_depth_predictor(args.phase, args.config, args.checkpoint, args.override)
 
     if args.annotations_root is None:
         import yaml

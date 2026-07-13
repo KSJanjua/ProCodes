@@ -1,7 +1,7 @@
 """Depth Range Feature Decoder (paper Fig. 5).
 
 Architecture, and exactly which parts are paper-derived vs. engineering
-judgment, is documented in the implementation plan (SS1 and SS4). Summary:
+judgment, is summarized below:
 
 - 3 coarse-to-fine levels, targeting 1/8, 1/4, 1/2 of the input resolution
   (Fig. 5's own labels) -- figure-inferred.
@@ -45,7 +45,7 @@ def _pad_to_multiple(x: torch.Tensor, k: int) -> Tuple[torch.Tensor, Tuple[int, 
 class PreLNTransformerBlock(nn.Module):
     """Standard pre-LN multi-head self-attention + FFN block ("Patch
     Attention" in Fig. 5 -- the paper gives no internal formula for this
-    block; this is the standard ViT-block convention, see plan SS4)."""
+    block; this is the standard ViT-block convention)."""
 
     def __init__(self, dim: int, num_heads: int, mlp_ratio: float = 4.0) -> None:
         super().__init__()
@@ -86,7 +86,7 @@ class DecoderLevel(nn.Module):
         # Fixed-shape learned positional embedding for this level's (padded)
         # token grid -- the paper specifies nothing about positional
         # encoding for "Patch Attention"; a learned embedding is the
-        # simplest standard choice (category 6, plan SS4).
+        # simplest standard choice.
         self.pos_embed = nn.Parameter(torch.zeros(1, max_padded_tokens, channels_attn))
         nn.init.trunc_normal_(self.pos_embed, std=0.02)
         self.blocks = nn.ModuleList(
@@ -132,7 +132,7 @@ class DecoderLevel(nn.Module):
 @dataclass
 class DepthRangeFeatures:
     """F_0, F_1, F_2 from the Depth Range Feature Decoder -- F_2 is the
-    finest level, exposed to Phase 2/3 as ``feat_final`` (plan SS17)."""
+    finest level, exposed to Phase 2/3 as ``feat_final``."""
 
     levels: List[torch.Tensor]
 

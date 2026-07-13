@@ -7,9 +7,8 @@ D_{i+1}. D_3 is the final holistic depth (before the last upsample to full
 input resolution, which lives in `model.py` -- this module operates at the
 decoder's internal 1/8,1/4,1/2 resolutions only).
 
-See the plan (SS1, SS5) for exactly which parts of this are paper-equation
-(Eq. 1-4 themselves) vs. this project's resolved reading of the 'i' index
-collision.
+Eq. 1-4 are paper-specified; the resolution of the paper's 'i' index
+collision (level index vs. bin-summation index) is this project's reading.
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ from instancedepth.models.hdi.depth_range_decoder import DepthRangeFeatures
 @dataclass
 class RefinementTrace:
     """Every D_i and S_i produced during the recurrence -- deep supervision
-    (SS6) needs D_1, D_2 (not just the seed D_0 or the final D_3), and all
+ needs D_1, D_2 (not just the seed D_0 or the final D_3), and all
     of S_0, S_1, S_2.
 
     ``bins`` stores raw logits (pre-sigmoid) -- see bin_heads.py's

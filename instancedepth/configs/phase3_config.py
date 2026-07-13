@@ -15,7 +15,7 @@ Phase 3 *composes* the two earlier phases rather than replacing them:
 So ``Phase3Config`` embeds a ``phase1`` and a ``phase2`` sub-config (each
 loaded from its own YAML path).
 
-Resolution handling (plan SS6.1): rather than forcing a single input
+Resolution handling: rather than forcing a single input
 resolution divisible by both DINOv2/14 and Swin/32 (their only shared
 multiple is 224, which is restrictive), Phase 3 keeps **each branch at its
 own native resolution** and reconciles them with **normalized [0,1] box
@@ -82,10 +82,10 @@ class Phase3HeadConfig:
 
     roi_size: Tuple[int, int] = (28, 28)   # (Hp, Wp) ROIAlign output [Reasonable Assumption]
                                            # (Mask R-CNN mask head is 28x28; occlusion
-                                           # boundaries want the finer grid, plan SS6.5)
+                                           # boundaries want the finer grid)
     roi_sampling_ratio: int = 2            # torchvision roi_align sampling_ratio
     refine_granularity: str = "dense"      # "dense" (Reading D, primary) | "scalar" (Reading H)
-                                           # -- plan SS5 decision, user-approved dense-primary
+                                           # -- user-approved dense-primary (see docs/PHASE3_DESIGN.md)
     composite_ratio: str = "dense"         # how the Eq.9 ratio (2E) is composited into the dense
                                            # map at inference: "dense" = per-pixel field (faithful
                                            # to the dense reading), "scalar" = one masked-mean
@@ -96,7 +96,7 @@ class Phase3HeadConfig:
     hidden_dim: int = 256                  # Phi_o working width [Reasonable Assumption]
     num_conv: int = 3                      # 1x1 conv layers in Phi_o [Reasonable Assumption]
     use_multiscale_feat: bool = False      # False: F_obj = F_2 only (faithful default);
-                                           # True: concat ROIAligned F_0,F_1,F_2 (plan SS3 Reading B)
+                                           # True: concat ROIAligned F_0,F_1,F_2
     geom_coord: bool = True                # include normalized-coordinate channels in G_obj
     geom_global_depth: bool = True         # include ROIAligned global depth in G_obj
     geom_mask_logit: bool = True           # include ROIAligned mask logits in G_obj
@@ -108,7 +108,7 @@ class Phase3LossConfig:
 
     lambda1/lambda2 have NO paper value (Table 6 only shows L_obj dominates,
     L_dist is secondary) -> sweep targets, not assumptions. ``holistic_weight``
-    is the anti-forgetting regularizer (plan SS7.4): OFF in the faithful
+    is the anti-forgetting regularizer: OFF in the faithful
     profile (Eq. 12 verbatim), ON at a small weight in the enhanced profile.
     Deviation, opt-in.
     """
@@ -164,7 +164,6 @@ class Phase3OptimConfig:
     poly_power: float = 0.9
     grad_clip_norm: float = 1.0
     precision: str = "bf16"
-    grad_checkpointing: bool = False
     batch_size: int = 1               # two backbones resident (P1 grad + P2 frozen) -> small
     num_workers: int = 4
     log_every: int = 50

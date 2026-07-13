@@ -12,8 +12,6 @@ matching the model losses, which mask out non-positive depth.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import Optional
 
 import cv2
 import numpy as np

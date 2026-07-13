@@ -1,4 +1,4 @@
-# Phase 2 (Instance Depth Layer Prediction) -- Option B design (Phase 2 plan):
+# Phase 2 (Instance Depth Layer Prediction) -- Option B design:
 # decoupled Swin-L backbone, full official COCO-pretrained Mask2Former
 # weights, fresh depth-layer head (Eq. 5-7).
 
@@ -47,7 +47,6 @@ optim:
   poly_power: 0.9
   grad_clip_norm: 0.1
   precision: "bf16"
-  grad_checkpointing: false
   batch_size: 2
   num_workers: 4
   log_every: 50

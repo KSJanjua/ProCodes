@@ -1,4 +1,4 @@
-"""Phase 2 evaluation metrics (Phase 2 plan, SS6 step 7).
+"""Phase 2 evaluation metrics.
 
 Deliberately a lighter-weight suite than full COCO-style AP (which would
 pull in `pycocotools` and a COCO-format conversion step for comparatively
@@ -9,7 +9,7 @@ for external comparability, it can be added without touching this module's
 callers (`evaluate_phase2.py`).
 
 The **occlusion-focused slice** (frames with >=2 overlapping GT instances)
-is the primary metric this redesign is judged against (plan SS2.3/SS6) --
+is the primary metric this redesign is judged against --
 implemented here as a boolean mask over frames, applied by the caller.
 """
 

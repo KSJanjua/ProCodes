@@ -86,7 +86,7 @@ def build_dataloader(cfg: Phase3Config, split: str) -> DataLoader:
     dataset = GIDInstanceDepthDataset(ds_cfg)
     if split == "train" and cfg.data.occlusion_only:
         # Bias training toward frames that can actually form occlusion pairs
-        # (plan SS10.2). Eval (split=="test") is never filtered -- dense
+        #. Eval (split=="test") is never filtered -- dense
         # metrics must cover the whole test split.
         from torch.utils.data import Subset
         occ = occlusion_frame_indices(dataset, max_depth=cfg.data.max_depth)
@@ -128,7 +128,7 @@ def make_compute_loss(cfg: Phase3Config, matcher: Phase2HungarianMatcher, criter
         losses = criterion(output, refine_targets, gt_depth)
         # Diagnostics (logged by Trainer, not part of `total`): how much
         # supervision this step actually had. num_valid_pairs == 0 explains a
-        # total==0 step (plan SS10.2 / the observed sparse-pair rate).
+        # total==0 step.
         losses["num_pairs"] = gt_depth.new_tensor(float(len(aux["pairs"])))
         losses["num_valid_pairs"] = refine_targets.pair_valid.sum().float()
         return losses

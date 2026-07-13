@@ -32,25 +32,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from instancedepth.predict import build_depth_predictor
 from instancedepth.utils.viz import colorize_depth, open_video_writer, put_label
 
 log = logging.getLogger("scripts.infer_video")
-
-
-def build_predict(phase: int, config: str, checkpoint: str, overrides):
-    if phase == 1:
-        from instancedepth.configs.config import HDIConfig
-        from instancedepth.models.hdi.inference import HDIInferencer
-        cfg = HDIConfig.from_yaml_with_overrides(config, overrides)
-        inf = HDIInferencer(cfg, checkpoint)
-        return (lambda bgr: inf.predict(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
-                .depth_final[0, 0].float().cpu().numpy()), cfg.bins.max_depth
-
-    from instancedepth.configs.phase3_config import Phase3Config
-    from instancedepth.models.phase3.inference import Phase3Inferencer
-    cfg = Phase3Config.from_yaml_with_overrides(config, overrides)
-    inf = Phase3Inferencer(cfg, checkpoint)
-    return (lambda bgr: inf.predict(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))["refined"]), cfg.data.max_depth
 
 
 def colorize(depth: np.ndarray, mode: str, max_depth: float) -> np.ndarray:
@@ -78,7 +63,7 @@ def main() -> None:
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-    predict, max_depth = build_predict(args.phase, args.config, args.checkpoint, args.override)
+    predict, max_depth = build_depth_predictor(args.phase, args.config, args.checkpoint, args.override)
 
     cap = cv2.VideoCapture(args.video)
     if not cap.isOpened():

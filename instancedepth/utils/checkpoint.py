@@ -1,6 +1,6 @@
 """Checkpointing: a rolling `latest.pth` (bounded disk usage) plus periodic
 and best-metric snapshots, each carrying model + optimizer + scheduler +
-iteration + RNG state (plan SS14/SS16) -- not just model weights, so a
+iteration + RNG state -- not just model weights, so a
 resumed run is bit-for-bit continuable, not just "restarted with warm
 weights".
 """

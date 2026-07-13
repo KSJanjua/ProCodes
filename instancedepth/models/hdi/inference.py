@@ -1,11 +1,11 @@
-"""In-process inference API for Phase 1 (plan SS6/SS10) -- the primary way
+"""In-process inference API for Phase 1 -- the primary way
 Phase 2/3 are meant to consume Holistic Depth Initialization, since
 persisting ``feat_final`` (F_2) for the whole ~55k-frame dataset would be a
 multi-hundred-GB on-disk cache. Load a checkpoint once, call ``.predict()``
 per frame (or ``.predict_batch()``) as needed.
 
 Output resolution note: the model operates internally at
-``cfg.data.image_size`` (e.g. 728x1288, see plan SS2), but the *raw* dataset
+``cfg.data.image_size`` (e.g. 728x1288), but the *raw* dataset
 frames (and the masks/instances a future Phase 2 will produce) are at the
 camera's native resolution (720x1280). To keep ``HolisticDepthOutput``
 spatially aligned with whatever resolution the caller actually gives us,

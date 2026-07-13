@@ -31,7 +31,7 @@ def test_decoder_output_shapes():
     decoder = DepthRangeFeatureDecoder(in_channels=BACKBONE_EMBED_DIM, image_hw=IMAGE_HW, cfg=cfg)
     feats = decoder(_dummy_backbone_features())
 
-    expected_hw = [(91, 161), (182, 322), (364, 644)]   # 1/8, 1/4, 1/2 of (728,1288) -- see plan SS1/SS2
+    expected_hw = [(91, 161), (182, 322), (364, 644)]   # 1/8, 1/4, 1/2 of (728,1288) --
     for i, (level_out, hw) in enumerate(zip(feats.levels, expected_hw)):
         assert level_out.shape == (2, cfg.channels_attn, *hw), (
             f"level {i}: expected {(2, cfg.channels_attn, *hw)}, got {tuple(level_out.shape)}"
@@ -74,10 +74,10 @@ def test_depth_seed_is_nonnegative():
 
 
 def test_correction_is_bidirectional():
-    """Regression test for the plan SS5 correction: with the ordinal
+    """Regression test for the ordinal-vs-softmax correction: with the ordinal
     (independent-sigmoid) S_i reading, E_i must be able to be positive OR
     negative across a large random batch -- a softmax reading would force
-    E_i <= 0 always (see plan SS5 for the derivation). This test would FAIL
+    E_i <= 0 always. This test would FAIL
     if S_i's activation were changed back to softmax."""
     decoder_cfg = DecoderConfig()
     bins_cfg = BinRefinementConfig(rd=5, max_depth=10.0)

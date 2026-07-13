@@ -1,16 +1,24 @@
 """Candidate filtering + occlusion-pair construction (paper Sec. 4.2.2, the
-front-end of "Occlusion Pair Relation Reasoning"; plan SS1 step (a)/(b)).
+front-end of "Occlusion Pair Relation Reasoning").
 
 Reads the frozen Phase-2 predictions and produces, per batch, a flat set of
 occlusion pairs ready for ROIAlign:
 
     1. Filter queries: category confidence > 0.9 AND mask confidence > 0.8.   [Paper Specified]
-    2. Among survivors, for each MAIN find overlapping candidates (mask
-       IoU > 0.1) and keep the depth-nearest one as the GUEST.                [Paper Specified rule]
-    3. Flatten (main, guest) pairs across the batch with a batch_index.
+    2. Among survivors, form overlapping pairs (IoU > 0.1) and keep, per
+       instance, its depth-nearest partner.                                  [Paper Specified rule]
+    3. Deduplicate to unordered pairs (member order nearer-first) and flatten
+       across the batch with a batch_index.
+
+Overlap uses bounding-box IoU by default, not mask IoU: this dataset's GT
+(and hence Phase-2's predicted) masks are modal and disjoint, so occluding
+instances have ~0 mask IoU regardless of confidence -- see
+``Phase3CandidateConfig.overlap_metric`` and ``docs/PHASE3_DIAGNOSIS.md``.
+Deduplication (defect D2) prevents the same instance being refined twice
+with disagreeing correction fields.
 
 Everything here is non-differentiable (thresholds / argmin over frozen
-Phase-2 masks), so it runs under no_grad on detached tensors.
+Phase-2 predictions), so it runs under no_grad on detached tensors.
 
 The scalar "mask confidence" reduction (paper says only "mask confidence
 > 0.8", not how a dense HxW map becomes one scalar) uses the standard
@@ -77,7 +85,7 @@ def mask_quality_scores(mask_prob: torch.Tensor, binarize_thresh: float) -> torc
 def boxes_and_masks_from_probs(mask_prob: torch.Tensor, binarize_thresh: float):
     """(B,N,H,W) -> (binary (B,N,H,W) bool, boxes (B,N,4) normalized xyxy,
     valid (B,N) bool). Boxes are normalized to [0,1] by (W,H) so downstream
-    ROIAlign is resolution-independent (plan SS6.1). Empty masks -> valid=False,
+    ROIAlign is resolution-independent. Empty masks -> valid=False,
     box=zeros."""
     B, N, H, W = mask_prob.shape
     binary = mask_prob >= binarize_thresh

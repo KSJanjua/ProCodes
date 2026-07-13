@@ -16,8 +16,7 @@ the score + mask-confidence thresholds (the same filtering
 ``evaluate_phase2.py`` applies).
 
 ``--occlusion-only`` restricts the output to frames with >=2 overlapping GT
-instances -- the exact slice the Phase 2 redesign is judged on (plan
-SS2.3/SS6), and where the original implementation's wrong-ownership /
+instances -- the exact slice the Phase 2 redesign is judged on, and where the original implementation's wrong-ownership /
 fragmentation failures showed up. Start here when eyeballing whether the
 redesign worked.
 

@@ -33,7 +33,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import torch
 
 from instancedepth.configs.phase3_config import Phase3Config
 from instancedepth.data.gid_dataset import GIDDatasetConfig, GIDInstanceDepthDataset

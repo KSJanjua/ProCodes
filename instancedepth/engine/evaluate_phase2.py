@@ -1,7 +1,7 @@
 """Phase 2 evaluation: overall mask precision/recall/IoU + depth-layer MAE,
 **and** the same metrics restricted to the occlusion-focused slice (frames
-with >=2 overlapping GT instances) -- per the Phase 2 plan (SS6 step 7),
-this slice is the primary signal for whether the redesign actually fixed
+with >=2 overlapping GT instances). This slice is the primary signal for
+whether the redesign actually fixed
 the wrong-ownership/fragmentation problems, since whole-dataset averages
 would dilute exactly the cases this rebuild targets.
 

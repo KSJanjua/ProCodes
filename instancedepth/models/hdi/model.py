@@ -2,7 +2,7 @@
 and Eq. 1-4 iterative bin refinement into the full Phase 1 (Holistic Depth
 Initialization) model.
 
-Forward pass, end to end (plan SS1):
+Forward pass, end to end:
 
     RGB (B,3,H,W)
       -> DINOv2Backbone            -> 3 feature maps, native (H/14,W/14) each

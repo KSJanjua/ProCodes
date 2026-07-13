@@ -1,6 +1,6 @@
 """Dataset diagnostics for Phase 1, run once before any training.
 
-Two independent checks (plan SS11 / SS16 step 4):
+Two independent checks:
 
 1. Depth-range statistics over the *full* (not just tracked-instance) GT
    depth maps in the training split -- informs whether MAX_d/rd (currently

@@ -1,4 +1,4 @@
-"""Phase 2, implementation-order step 1 (see the Phase 2 plan, SS5.5/SS6):
+"""Phase 2, implementation-order step 1:
 verify exactly what `transformers.Mask2FormerForUniversalSegmentation` (and
 its underlying `Mask2FormerModel` trunk) actually expose, before writing
 the depth-layer head or the `Phase2Output` contract against assumed field

@@ -146,7 +146,7 @@ class Mask2FormerWrapper(nn.Module):
             Hub. Off by default -- see ``_resolve_checkpoint_source``.
         num_classes : if set, reinitializes the classification head for a
             new class count (this dataset: 1 category, ``person`` --
-            standard fine-tuning practice, per the Phase 2 plan SS6 step 5).
+            standard fine-tuning practice).
             ``None`` keeps COCO's original 80-class head (useful only for
             the verification step / sanity-checking the loaded weights).
         """

@@ -1,5 +1,5 @@
 """Depth-layer head (Eq. 5-7's `Dep_i`), Reading A from the Phase 2 plan
-(SS1.1): a simple MLP on each query embedding, analogous to Mask2Former's
+: a simple MLP on each query embedding, analogous to Mask2Former's
 own existing classification head. Reading B (mask-pooled Phase-1 depth) is
 logged as a diagnostic only -- see `diagnostics.py`.
 """

@@ -10,7 +10,7 @@ The dense ``refined_depth`` is Phase 1's ``depth_final`` with each confident
 occlusion pair's ROI corrections composited back in (nearest-depth-wins for
 overlaps, matching ``data_engine/annotate.py::_flatten_id_map``). Regions
 with no confident/paired instance are Phase-1 depth verbatim, so non-crowded
-scenes degrade gracefully to Phase-1 quality (plan SS9).
+scenes degrade gracefully to Phase-1 quality.
 """
 
 from __future__ import annotations

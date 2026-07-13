@@ -1,4 +1,4 @@
-"""Canonical disparity conversion + camera intrinsics handling (plan SS8/SS9).
+"""Canonical disparity conversion + camera intrinsics handling.
 
 The network's only output space is metric depth (meters). Disparity is a
 deterministic, invertible, *post-hoc* transform of a metric depth
@@ -36,7 +36,7 @@ def depth_to_canonical_disparity(depth: torch.Tensor, intrinsics: CameraIntrinsi
     ----------
     depth : any-shape tensor of metric depth (meters).
     intrinsics : must have ``focal_px`` and ``width_px`` set (raises
-        otherwise -- see plan SS9: this function never silently guesses a
+        otherwise): this function never silently guesses a
         camera constant).
 
     Returns

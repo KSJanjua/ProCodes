@@ -1,5 +1,5 @@
-"""ROIAlign feature extraction for occlusion pairs (paper Eq. 8 inputs;
-plan SS3/SS4/SS6). Reconciles the two branches' *different* native
+"""ROIAlign feature extraction for occlusion pairs (paper Eq. 8 inputs).
+Reconciles the two branches' *different* native
 resolutions by working in normalized [0,1] box coordinates:
 
     F_obj  = ROIAlign(feat_final,  box)   -> (P,2,C,Hp,Wp)   depth-feature evidence   [Paper Specified]
@@ -62,7 +62,7 @@ def roi_align_per_instance(per_inst_maps: torch.Tensor, boxes_norm_flat: torch.T
 def normalized_coord_grid(boxes_norm_flat: torch.Tensor, out_hw: Tuple[int, int]) -> torch.Tensor:
     """(K,4) normalized xyxy -> (K,2,Hp,Wp) per-cell full-frame normalized
     (x,y). This is G_obj's "normalized coordinates" -- the geometric glue
-    that lets Phi_o relate two independently-cropped ROIs (plan SS6.2)."""
+    that lets Phi_o relate two independently-cropped ROIs."""
     K = boxes_norm_flat.shape[0]
     Hp, Wp = out_hw
     device, dtype = boxes_norm_flat.device, boxes_norm_flat.dtype

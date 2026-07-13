@@ -30,7 +30,7 @@ candidate:
 head:
   roi_size: [28, 28]
   roi_sampling_ratio: 2
-  refine_granularity: "dense"   # user-approved dense-primary (plan SS5)
+  refine_granularity: "dense"   # user-approved dense-primary
   composite_ratio: "dense"      # "dense" | "scalar" -- see relation_head.composite_refined_depth
   hidden_dim: 256
   num_conv: 3
@@ -64,7 +64,6 @@ optim:
   poly_power: 0.9
   grad_clip_norm: 1.0
   precision: "bf16"
-  grad_checkpointing: false
   batch_size: 1
   num_workers: 4
   log_every: 50

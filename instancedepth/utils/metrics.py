@@ -1,8 +1,6 @@
 """Depth evaluation metrics matching the paper's Table 2/3 definitions
 (standard KITTI/NYU-style protocol: RMS, REL, RMSlog, Log10, sigma1-3),
-plus optional canonical-disparity diagnostics (plan SS8 -- diagnostic only,
-never used for training or for selecting the "best" checkpoint unless you
-explicitly choose to)."""
+plus optional canonical-disparity diagnostics."""
 
 from __future__ import annotations
 
@@ -41,7 +39,7 @@ def compute_depth_metrics(pred: torch.Tensor, gt: torch.Tensor, mask: torch.Tens
 def compute_disparity_diagnostics(
     pred: torch.Tensor, gt: torch.Tensor, mask: torch.Tensor, intrinsics: CameraIntrinsics
 ) -> Optional[Dict[str, float]]:
-    """Diagnostic-only near-field metrics (plan SS8); returns None if
+    """Diagnostic-only near-field metrics; returns None if
     intrinsics aren't resolvable rather than guessing a camera constant."""
     if intrinsics.focal_px is None or intrinsics.width_px is None:
         return None

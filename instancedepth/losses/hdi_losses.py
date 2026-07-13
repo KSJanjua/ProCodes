@@ -2,12 +2,9 @@
 
 The paper specifies NO training loss for this stage anywhere (Sec. 4.1 /
 Eq. 1-4 are forward-computation only) -- every loss term here is this
-project's own engineering decision, justified in the plan (SS2/SS6) by
-analogy to Eq. 10 (the *same* paper's instance-rectification stage, one
-step later) and to Fu et al.'s DORN (CVPR 2018, cited by InstanceDepth as
-ref [18]). See the plan for the full comparison against Depth Anything V2 /
-Video Depth Anything / AdaBins / BerHu / plain L1-L2 and why each was or
-wasn't adopted.
+project's own engineering decision, justified by analogy to Eq. 10 (the
+*same* paper's instance-rectification stage, one step later) and to Fu et
+al.'s DORN (CVPR 2018, cited by InstanceDepth as ref [18]).
 
     L_hdi = SigLog(D_final, GT)
           + sum_{i=1,2} w_i * SigLog(D_i, GT)              # deep supervision, D_1/D_2 only
@@ -42,8 +39,9 @@ class SigLogLoss(nn.Module):
     the exact form InstanceDepth itself cites for Eq. 10, and the one
     verified directly in Depth Anything V2's ``util/loss.py``
     (``SiLogLoss``): sqrt(mean(d^2) - lambda*mean(d)^2), d = log(pred)-log(gt).
-    No scale/shift alignment step (unlike MiDaS/DAv2's ``L_ssi``) -- see
-    plan SS6 for why that distinction matters here.
+    No scale/shift alignment step (unlike MiDaS/DAv2's ``L_ssi``): this
+    dataset has true metric GT, so scale/shift invariance would discard
+    usable signal.
     """
 
     def __init__(self, lam: float = 0.5) -> None:
@@ -100,7 +98,7 @@ REGRESSION_LOSSES: Dict[str, Callable[[], nn.Module]] = {
 
 
 # --------------------------------------------------------------------------- #
-# Ordinal bin supervision (plan SS5/SS6 -- own construction, DORN-analogous)
+# Ordinal bin supervision
 # --------------------------------------------------------------------------- #
 def ordinal_bin_targets(gt_depth: torch.Tensor, rd: int, max_depth: float) -> torch.Tensor:
     """
@@ -112,7 +110,7 @@ def ordinal_bin_targets(gt_depth: torch.Tensor, rd: int, max_depth: float) -> to
     -------
     (B,rd,H,W) target_b = 1{gt_depth > b * (max_depth/rd)} for b=0..rd-1 --
     an ordinal/cumulative encoding (NOT one-hot/mutually-exclusive), matching
-    the independent-sigmoid reading of S_i (plan SS5). ``S_i``'s own
+    the independent-sigmoid reading of S_i. ``S_i``'s own
     ground-truth semantics are not stated anywhere in the paper (Eq. 1-4 has
     no loss at all); this construction is this project's own, chosen for
     consistency with Eq. 2-4's arithmetic and DORN's ordinal-regression
@@ -164,7 +162,7 @@ class HDILoss(nn.Module):
         if self.disparity_aux_weight > 0:
             assert camera is not None and camera.focal_px and camera.width_px, (
                 "HDILoss constructed with disparity_aux_weight > 0 but no "
-                "usable camera intrinsics were provided (see plan SS9)."
+                "usable camera intrinsics were provided."
             )
 
     def forward(

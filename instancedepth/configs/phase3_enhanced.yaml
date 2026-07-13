@@ -1,5 +1,5 @@
 # Phase 3 -- ENHANCED profile. Identical to phase3.yaml except for the two
-# opt-in, flagged deviations (plan SS7.4 / SS3):
+# opt-in, flagged deviations:
 #   * loss.holistic_weight > 0 : anti-forgetting regularizer, keeps the
 #     fine-tuned Phase-1 depth branch from drifting in non-instance regions.
 #   * head.use_multiscale_feat  : F_obj = concat(F_0, F_1, F_2) -- honors the
@@ -62,7 +62,6 @@ optim:
   poly_power: 0.9
   grad_clip_norm: 1.0
   precision: "bf16"
-  grad_checkpointing: false
   batch_size: 1
   num_workers: 4
   log_every: 50

@@ -1,8 +1,8 @@
-"""Loss correctness tests, including a regression test of the plan's
-SigLog/canonical-disparity equivalence proof (SS8) -- if this test ever
-fails, either the proof was wrong or someone changed the disparity
-auxiliary loss to use a log-space formulation (which SS8 explains is
-redundant and should not be reintroduced).
+"""Loss correctness tests, including a regression test of the
+SigLog/canonical-disparity equivalence proof -- if this test ever fails,
+either the proof was wrong or someone changed the disparity auxiliary loss
+to use a log-space formulation (which is redundant and should not be
+reintroduced).
 
 Run:  pytest tests/test_hdi_losses.py -v
 """
@@ -25,7 +25,7 @@ def test_silog_zero_for_identical_input():
 
 
 def test_silog_on_disparity_equals_silog_on_depth():
-    """Plan SS8's proof, as an executable check: log(C/pred)-log(C/gt) ==
+    """The equivalence proof, as an executable check: log(C/pred)-log(C/gt) ==
     -(log(pred)-log(gt)); since SiLog only uses squared terms of that
     difference, the two losses must be numerically identical."""
     torch.manual_seed(0)
@@ -42,7 +42,7 @@ def test_silog_on_disparity_equals_silog_on_depth():
     loss_disp = loss_fn(disp_pred, disp_gt, mask)
     assert torch.allclose(loss_depth, loss_disp, atol=1e-5), (
         f"SigLog(depth)={loss_depth.item()} vs SigLog(disparity)={loss_disp.item()} "
-        "-- these must be identical (plan SS8); if you changed the disparity "
+        "-- these must be identical; if you changed the disparity "
         "auxiliary loss to a log-space form, it is redundant, not a new signal."
     )
 

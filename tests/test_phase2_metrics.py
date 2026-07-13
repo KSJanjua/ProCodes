@@ -1,5 +1,4 @@
-"""Tests for the occlusion-focused evaluation metrics (Phase 2 plan, SS6
-step 7) -- synthetic masks only, no model/network needed.
+"""Tests for the occlusion-focused evaluation metrics -- synthetic masks only, no model/network needed.
 
 Run:  pytest tests/test_phase2_metrics.py -v
 """

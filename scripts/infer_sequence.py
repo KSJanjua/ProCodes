@@ -1,6 +1,6 @@
 """Batch inference over held-out sequences -> sharded on-disk artifacts for
 downstream (batch eval / visualization) use. This is the *secondary*
-integration path (plan SS6/SS10); Phase 2/3 training itself should prefer
+integration path; Phase 2/3 training itself should prefer
 ``instancedepth.models.hdi.inference.HDIInferencer`` directly (avoids
 persisting a multi-hundred-GB dense feature cache).
 
@@ -40,10 +40,9 @@ from typing import List
 import numpy as np
 
 from instancedepth.configs.config import HDIConfig
-from instancedepth.data.gid_dataset import GIDInstanceDepthDataset
 from instancedepth.models.hdi.inference import HDIInferencer
 from instancedepth.models.hdi.output import CONTRACT_VERSION
-from instancedepth.utils.manifest import git_commit_hash  # reuse, not duplicate (plan: avoid duplicated logic)
+from instancedepth.utils.manifest import git_commit_hash  # reuse, not duplicate
 
 log = logging.getLogger("scripts.infer_sequence")
 

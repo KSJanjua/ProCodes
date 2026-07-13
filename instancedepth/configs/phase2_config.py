@@ -1,7 +1,7 @@
 """Configuration for Phase 2 (Instance Depth Layer Prediction).
 
 Separate from instancedepth/configs/config.py (Phase 1's HDIConfig) --
-Phase 2 has its own decoupled backbone (plan SS3, Option B) and does not
+Phase 2 has its own decoupled backbone and does not
 share Phase 1's config tree. Same dataclass + from_yaml pattern as Phase 1
 and instancedepth/data_engine/config.py.
 """
@@ -29,7 +29,7 @@ class Phase2MatcherConfig:
     """Eq. 5-7's matching-cost weights. cost_class/cost_mask/cost_dice
     reuse Mask2Former's own tuned recipe (category 5); cost_depth is this
     paper's own addition with no specified weight (category 6, needs its
-    own sweep -- see plan SS3/SS5)."""
+    own sweep)."""
 
     cost_class: float = 2.0
     cost_mask: float = 5.0
@@ -64,7 +64,7 @@ class Phase2DataConfig:
 
 @dataclass
 class Phase2OptimConfig:
-    """Mask2Former's own fine-tuning convention (plan SS3/SS5), NOT the
+    """Mask2Former's own fine-tuning convention, NOT the
     paper's frozen-encoder/25k-iter/1e-5 schedule (calibrated for a
     fresh-decoder-only regime that doesn't apply once the backbone is a
     full Swin-L Mask2Former). lr/total_iters/grad_clip_norm are starting
@@ -78,7 +78,6 @@ class Phase2OptimConfig:
     poly_power: float = 0.9
     grad_clip_norm: float = 0.1
     precision: str = "bf16"
-    grad_checkpointing: bool = False
     batch_size: int = 2
     num_workers: int = 4
     log_every: int = 50

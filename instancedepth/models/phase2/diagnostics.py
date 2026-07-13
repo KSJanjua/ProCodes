@@ -1,4 +1,4 @@
-"""Reading B diagnostic (Phase 2 plan, SS1.1): mask-pooled Phase-1 depth,
+"""Reading B diagnostic: mask-pooled Phase-1 depth,
 logged during training as a comparison signal for the learned depth head
 (Reading A) -- not trained on, purely a sanity check that the learned head
 converges to something physically sensible.

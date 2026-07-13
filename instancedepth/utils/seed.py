@@ -1,4 +1,4 @@
-"""Deterministic seeding, for reproducibility (plan SS14)."""
+"""Deterministic seeding, for reproducibility."""
 
 from __future__ import annotations
 

@@ -6,7 +6,7 @@ polynomial decay) is adapted from Depth Anything V2's own training code
 (``metric_depth/train.py``) -- the paper states only the initial LR
 (1e-5) and iteration count (55k) for Phase 1's "Global Depth Range
 Pretraining" stage (Sec. 4.3); everything else here is that reference
-repo's convention, not a paper fact (plan SS7).
+repo's convention, not a paper fact.
 """
 
 from __future__ import annotations

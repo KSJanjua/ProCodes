@@ -1,4 +1,4 @@
-"""Phase2Output -- the contract Phase 3 consumes (Phase 2 plan, SS5.5).
+"""Phase2Output -- the contract Phase 3 consumes.
 Mirrors instancedepth/models/hdi/output.py's HolisticDepthOutput pattern:
 dataclass, contract_version, deliberately over-exposing (query_embeddings
 isn't paper-required but is cheap to keep for future use) rather than
@@ -27,8 +27,7 @@ class Phase2Output:
     def scores(self) -> torch.Tensor:
         """(B, N) foreground class confidence -- softmax over classes,
         excluding the no-object slot, max over remaining classes. Used for
-        the >0.9 category-confidence filter (Phase 2 plan SS5.5, traced
-        from Eq. 8's context)."""
+        the >0.9 category-confidence filter."""
         probs = self.class_logits.softmax(-1)[..., :-1]
         return probs.max(-1).values
 

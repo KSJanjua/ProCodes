@@ -1,4 +1,4 @@
-"""HolisticDepthOutput contract sanity checks (plan SS17)."""
+"""HolisticDepthOutput contract sanity checks."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def test_feat_stride_matches_shapes():
 
 def test_resized_output_after_inference_still_self_consistent():
     """Mirrors what HDIInferencer.predict() does when the caller's image
-    isn't cfg.data.image_size (plan: models/hdi/inference.py)."""
+    isn't cfg.data.image_size."""
     out = _dummy_output()
     orig_hw = (720, 1280)
     resized = HolisticDepthOutput(

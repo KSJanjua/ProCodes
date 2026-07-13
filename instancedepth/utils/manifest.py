@@ -1,5 +1,5 @@
 """Run manifest: everything needed to reproduce a training run months later
-(plan SS14). Written once at training start, re-verified (RNG/optimizer/
+. Written once at training start, re-verified (RNG/optimizer/
 scheduler state) at every checkpoint.
 """
 

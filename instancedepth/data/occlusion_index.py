@@ -1,5 +1,4 @@
-"""Occlusion-frame selection for Phase-3 training (plan SS10.2, and the
-practical fix for the ~5% valid-pair rate observed on uniform sampling).
+"""Occlusion-frame selection for Phase-3 training.
 
 Phase 3's refinement loss only exists on frames that contain a confident
 *overlapping* instance pair; uniform frame sampling wastes most steps on

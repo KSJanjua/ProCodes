@@ -1,14 +1,14 @@
-"""Phase 3 refinement losses (paper Eq. 10-12; plan SS7).
+"""Phase 3 refinement losses (paper Eq. 10-12).
 
     L_obj  (Eq. 10) = SigLog(D_hat, DT)          # dense, over VISIBLE GT ROI pixels
     L_dist (Eq. 11) = mean_p |(D_hat_i - D_hat_j)^2 - (DT_i - DT_j)^2|   # scalar, per valid pair
     L_ref  (Eq. 12) = lambda_obj * L_obj + lambda_dist * L_dist
-    (+ optional holistic anti-forgetting term, plan SS7.4 -- OFF in faithful)
+    (+ optional holistic anti-forgetting term -- OFF in the faithful profile)
 
 ``L_obj`` reuses Phase 1's ``SigLogLoss`` unchanged (the exact Eigen scale-
 invariant-log the paper cites for Eq. 10). Masking to visible GT only,
 because a single RGB-D sensor has no ground truth for hidden pixels
-(plan SS0.3).
+.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ class Phase3Criterion(nn.Module):
             l_dist = zero
         losses["l_dist"] = cfg.lambda_dist * l_dist
 
-        # --- optional anti-forgetting holistic regularizer (plan SS7.4) ----
+        # --- optional anti-forgetting holistic regularizer ----
         if cfg.holistic_weight > 0:
             mask = gt_depth > 0
             losses["l_holistic"] = cfg.holistic_weight * self.silog(output.base_depth, gt_depth, mask)

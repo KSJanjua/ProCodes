@@ -1,4 +1,4 @@
-"""HolisticDepthOutput -- the single contract Phase 2/3 consume (plan SS17).
+"""HolisticDepthOutput -- the single contract Phase 2/3 consume.
 
 ``contract_version`` is bumped whenever a field is added/removed/reshaped
 (or, as in 1.0 -> 1.1, has its *semantic* changed even though the tensor
@@ -18,7 +18,7 @@ is unchanged (it aliases F_2). This is additive and backward compatible:
 the field defaults to ``None`` (populated by ``HolisticDepthModel.forward``;
 left ``None`` by any consumer that reconstructs the dataclass without it,
 e.g. ``inference.py``'s resize path). Phase 3's optional multi-scale
-``F_obj`` (``head.use_multiscale_feat``, plan SS3) consumes all three.
+``F_obj`` (``head.use_multiscale_feat``) consumes all three.
 """
 
 from __future__ import annotations

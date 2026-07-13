@@ -74,7 +74,6 @@ optim:
   poly_power: 0.9
   grad_clip_norm: 1.0
   precision: "bf16"
-  grad_checkpointing: false
   batch_size: 4
   num_workers: 4
   log_every: 50

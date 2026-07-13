@@ -1,6 +1,6 @@
 """Point-sampling utilities (PointRend, Kirillov et al. 2020), reimplemented
 standalone here rather than depending on Detectron2 (which this project
-deliberately avoids vendoring -- see the Phase 2 plan, SS3). This is the
+deliberately avoids vendoring). This is the
 same, well-known public algorithm Mask2Former's official matcher/criterion
 use for memory-efficient mask supervision (point-sampled rather than dense
 BCE+Dice); reimplemented directly against `torch.nn.functional.grid_sample`

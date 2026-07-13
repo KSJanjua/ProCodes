@@ -1,6 +1,6 @@
 """Phase 1 evaluation: paper Table 2/3 metrics (RMS/REL/RMSlog/Log10/
 sigma1-3) on the held-out test split, plus optional disparity diagnostics
-(plan SS8 -- never affects training, purely informational).
+.
 
 Usage (on the Backend.AI server):
 
@@ -85,7 +85,7 @@ def evaluate(
 
 def make_eval_fn(cfg: HDIConfig, max_batches: int = 50):
     """Factory used by ``Trainer`` for periodic in-training eval (a cheap
-    subset, not the full held-out set -- see plan SS16 'eval cadence')."""
+    subset, not the full held-out set)."""
     val_loader = build_dataloader(cfg, split="test")
 
     def eval_fn(model: torch.nn.Module) -> Dict[str, float]:

@@ -2,13 +2,12 @@
 
 Head architectures ("a small network" / "a lightweight convolutional
 network" in the paper, with no further detail) are a own-engineering-
-decision, DPT-output-head-scale conv stacks (plan SS1 items 11/13, SS16
-item 2). Their *existence*, *inputs*, and (for the confidence head) their
+decision, DPT-output-head-scale conv stacks. Their *existence*, *inputs*, and (for the confidence head) their
 *sigmoid activation* are paper-explicit (Eq. 1).
 
 Activation for the bin head (``OrdinalBinHead``) is **sigmoid, not
-softmax** -- see the plan SS5 for why: a softmax reading forces the Eq. 2-4
-correction to be one-directional, which the equations don't support. The
+softmax**: a softmax reading forces the Eq. 2-4 correction to be
+one-directional, which the equations don't support. The
 independent-per-bin-sigmoid reading matches Fu et al.'s ordinal regression
 (DORN, CVPR 2018), directly cited by InstanceDepth (ref [18]).
 
@@ -68,8 +67,8 @@ class ConfidenceHead(nn.Module):
 
 
 class OrdinalBinHead(nn.Module):
-    """S_i in Eq. 2-4: independent per-bin sigmoid (ordinal encoding, plan
-    SS5) -- NOT a softmax over mutually-exclusive classes.
+    """S_i in Eq. 2-4: independent per-bin sigmoid (ordinal encoding) --
+    NOT a softmax over mutually-exclusive classes.
 
     Returns raw logits (see module docstring); callers apply ``.sigmoid()``
     where a probability is actually needed."""
