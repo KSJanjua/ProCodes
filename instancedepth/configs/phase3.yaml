@@ -31,6 +31,7 @@ head:
   roi_size: [28, 28]
   roi_sampling_ratio: 2
   refine_granularity: "dense"   # user-approved dense-primary (plan SS5)
+  composite_ratio: "dense"      # "dense" | "scalar" -- see relation_head.composite_refined_depth
   hidden_dim: 256
   num_conv: 3
   use_multiscale_feat: false    # F_obj = F_2 only (faithful default)

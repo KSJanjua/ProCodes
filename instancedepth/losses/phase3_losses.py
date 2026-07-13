@@ -46,8 +46,16 @@ class Phase3Criterion(nn.Module):
 
         # --- L_obj (dense, Eq. 10) -----------------------------------------
         d_hat = output.d_hat_roi
-        if d_hat is not None and d_hat.shape[0] > 0 and tgt.dt_valid.any():
-            l_obj = self.silog(d_hat, tgt.dt_dense, tgt.dt_valid)
+        dt_valid = tgt.dt_valid
+        if cfg.min_valid_roi_px > 0 and dt_valid.numel() > 0:
+            # Skip members whose ROI has too few valid GT pixels (defect D5,
+            # docs/PHASE3_DIAGNOSIS.md): 1-2 stray sensor returns give
+            # maximally noisy per-instance supervision.
+            counts = dt_valid.flatten(2).sum(-1)                     # (P,2)
+            keep = counts >= cfg.min_valid_roi_px                     # (P,2)
+            dt_valid = dt_valid & keep[:, :, None, None, None]
+        if d_hat is not None and d_hat.shape[0] > 0 and dt_valid.any():
+            l_obj = self.silog(d_hat, tgt.dt_dense, dt_valid)
         else:
             l_obj = zero
         losses["l_obj"] = cfg.lambda_obj * l_obj

@@ -86,6 +86,13 @@ class Phase3HeadConfig:
     roi_sampling_ratio: int = 2            # torchvision roi_align sampling_ratio
     refine_granularity: str = "dense"      # "dense" (Reading D, primary) | "scalar" (Reading H)
                                            # -- plan SS5 decision, user-approved dense-primary
+    composite_ratio: str = "dense"         # how the Eq.9 ratio (2E) is composited into the dense
+                                           # map at inference: "dense" = per-pixel field (faithful
+                                           # to the dense reading), "scalar" = one masked-mean
+                                           # ratio per instance (maximal within-person coherence;
+                                           # all remaining variation comes from base geometry).
+                                           # Compositing is not paper-specified -- see
+                                           # relation_head.composite_refined_depth + PHASE3_DIAGNOSIS.md.
     hidden_dim: int = 256                  # Phi_o working width [Reasonable Assumption]
     num_conv: int = 3                      # 1x1 conv layers in Phi_o [Reasonable Assumption]
     use_multiscale_feat: bool = False      # False: F_obj = F_2 only (faithful default);
@@ -192,6 +199,10 @@ class Phase3Config:
         assert self.head.refine_granularity in ("dense", "scalar"), (
             f"head.refine_granularity must be 'dense' or 'scalar', got "
             f"{self.head.refine_granularity!r}"
+        )
+        assert self.head.composite_ratio in ("dense", "scalar"), (
+            f"head.composite_ratio must be 'dense' or 'scalar', got "
+            f"{self.head.composite_ratio!r}"
         )
         assert self.candidate.guest_rule in ("nearest_depth", "frontmost")
 

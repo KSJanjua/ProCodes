@@ -81,8 +81,16 @@ def build_dense_gt_rois(
         dense_maps[m, 0] = depth_b * valid
         valid_maps[m, 0] = valid.float()
 
-    dt_dense = roi_align_per_instance(dense_maps, boxes_flat, out_hw, sampling_ratio)
+    dt_num = roi_align_per_instance(dense_maps, boxes_flat, out_hw, sampling_ratio)
     dt_valid_soft = roi_align_per_instance(valid_maps, boxes_flat, out_hw, sampling_ratio)
+    # Normalized convolution (defect D4, docs/PHASE3_DIAGNOSIS.md): dense_maps
+    # is depth*valid (zeros outside the instance), so a plain ROIAlign dilutes
+    # boundary cells toward zero by their invalid fraction -- a 3 m person's
+    # edge cells got 1.6-2.9 m targets, training Phi_o to push depth down at
+    # instance boundaries. Dividing by the aligned valid-fraction recovers the
+    # true local mean depth for every cell that passes the 0.5 validity gate.
+    dt_dense = dt_num / dt_valid_soft.clamp_min(1e-6)
     dt_dense = dt_dense.reshape(P, 2, 1, Hp, Wp)
     dt_valid = (dt_valid_soft.reshape(P, 2, 1, Hp, Wp) >= 0.5) & (dt_dense > 0)
+    dt_dense = dt_dense * dt_valid   # zero out invalid cells (matches docstring contract)
     return RefineTargets(dt_scalar, pair_valid, dt_dense, dt_valid)

@@ -39,16 +39,16 @@ def _synthetic_p2(H=32, W=32):
     return Phase2Output(mask_logits, class_logits, depth_layers, query_embeddings, (H, W))
 
 
-def test_build_pairs_finds_overlap_pair():
+def test_build_pairs_finds_overlap_pair_deduplicated():
     p2 = _synthetic_p2()
     cfg = Phase3CandidateConfig()
     pairs = build_pairs(p2, cfg)
-    # q0<->q1 overlap both directions; q2 isolated -> exactly 2 directional pairs
-    assert len(pairs) == 2
-    mains = set(int(pairs.query_idx[p, 0]) for p in range(len(pairs)))
-    guests = set(int(pairs.query_idx[p, 1]) for p in range(len(pairs)))
-    assert mains == {0, 1} and guests == {0, 1}
-    assert 2 not in mains and 2 not in guests
+    # q0<->q1 mutually overlap -> ONE unordered pair (defect D2 fix: the old
+    # directional build produced both (0,1) and (1,0), writing the same
+    # person twice with disagreeing correction fields). q2 stays isolated.
+    assert len(pairs) == 1
+    # canonical member order: nearer (dep 2.0) first
+    assert pairs.query_idx[0].tolist() == [0, 1]
     assert (pairs.iou > cfg.overlap_iou_thresh).all()
     # normalized boxes in [0,1]
     assert (pairs.boxes_norm >= 0).all() and (pairs.boxes_norm <= 1).all()
@@ -86,6 +86,8 @@ def test_box_iou_catches_modal_disjoint_masks_that_mask_iou_misses():
     cfg_box = Phase3CandidateConfig(overlap_metric="box_iou")
     pairs_box = build_pairs(p2, cfg_box)
     assert len(pairs_box) > 0, "box_iou must detect the pair despite disjoint masks"
+    # canonical order: instance 1 (dep 2.0) is nearer -> member 0
+    assert pairs_box.query_idx[0].tolist() == [1, 0]
 
     cfg_mask = Phase3CandidateConfig(overlap_metric="mask_iou")
     pairs_mask = build_pairs(p2, cfg_mask)
@@ -158,22 +160,128 @@ def test_relation_head_scalar_granularity():
     assert torch.allclose(e[:, :, :, 0:1, 0:1].expand_as(e), e, atol=1e-6)
 
 
-def test_composite_nearest_wins():
+def _mk_pairset(boxes, query_idx=None, b=0):
+    from instancedepth.models.phase3.candidates import PairSet
+    boxes = torch.tensor(boxes, dtype=torch.float32)[None]         # (1,2,4)
+    return PairSet(
+        batch_index=torch.tensor([b]),
+        query_idx=torch.tensor(query_idx or [[0, 1]]),
+        boxes_norm=boxes,
+        iou=torch.tensor([0.3]),
+    )
+
+
+def test_composite_identity_at_e_half():
+    """Defect D1 regression: E=0.5 must be an EXACT no-op on the full-res base
+    (the old paste-low-res-depth composite could never satisfy this)."""
+    H = W = 64
+    base = torch.rand(1, 1, H, W) * 3 + 1                          # textured base
+    pairs = _mk_pairset([[0.1, 0.1, 0.6, 0.6], [0.4, 0.4, 0.9, 0.9]])
+    e = torch.full((1, 2, 1, 14, 14), 0.5)
+    layers = torch.tensor([[2.0, 3.0]])
+    mask_prob = torch.zeros(1, 2, H, W)
+    mask_prob[0, 0, 8:36, 8:36] = 1.0
+    mask_prob[0, 1, 28:56, 28:56] = 1.0
+    refined = composite_refined_depth(base, pairs, e, layers, mask_prob, 0.5, "dense")
+    assert torch.allclose(refined, base, atol=1e-5)
+
+
+def test_composite_ratio_preserves_base_geometry():
+    """Constant E != 0.5 -> refined = (2E)*base inside the mask (geometry
+    preserved, uniformly rescaled), base untouched outside."""
+    H = W = 64
+    base = torch.rand(1, 1, H, W) * 3 + 1
+    pairs = _mk_pairset([[0.0, 0.0, 0.5, 0.5], [0.5, 0.5, 1.0, 1.0]])
+    e = torch.zeros(1, 2, 1, 14, 14)
+    e[0, 0] = 0.7                                                  # ratio 1.4 for member 0
+    e[0, 1] = 0.5                                                  # identity for member 1
+    layers = torch.tensor([[2.0, 3.0]])
+    mask_prob = torch.zeros(1, 2, H, W)
+    mask_prob[0, 0, 4:28, 4:28] = 1.0                              # inside member-0 box
+    mask_prob[0, 1, 36:60, 36:60] = 1.0
+    for mode in ("dense", "scalar"):
+        refined = composite_refined_depth(base, pairs, e, layers, mask_prob, 0.5, mode)
+        inside = refined[0, 0, 4:28, 4:28] / base[0, 0, 4:28, 4:28]
+        assert torch.allclose(inside, torch.full_like(inside, 1.4), atol=1e-3), mode
+        assert torch.allclose(refined[0, 0, 36:60, 36:60], base[0, 0, 36:60, 36:60], atol=1e-5)
+        outside = refined[0, 0, 30:34, 0:34]                       # between the masks
+        assert torch.allclose(outside, base[0, 0, 30:34, 0:34], atol=1e-6)
+
+
+def test_composite_nearer_layer_wins_contested_pixels():
+    """Defect D3 regression: cross-instance contention is arbitrated by
+    per-instance LAYER (occluder wins), mirroring _flatten_id_map -- not by
+    per-pixel value comparison."""
+    H = W = 64
+    base = torch.full((1, 1, H, W), 4.0)
+    pairs = _mk_pairset([[0.0, 0.0, 0.75, 0.75], [0.25, 0.25, 1.0, 1.0]])
+    e = torch.zeros(1, 2, 1, 14, 14)
+    e[0, 0] = 0.75    # nearer instance: ratio 1.5 -> 6.0  (HIGHER value, still must win)
+    e[0, 1] = 0.25    # farther instance: ratio 0.5 -> 2.0
+    layers = torch.tensor([[2.0, 5.0]])                            # member 0 nearer
+    mask_prob = torch.zeros(1, 2, H, W)
+    mask_prob[0, 0, 0:48, 0:48] = 1.0
+    mask_prob[0, 1, 16:64, 16:64] = 1.0                            # overlaps member 0 in 16:48
+    refined = composite_refined_depth(base, pairs, e, layers, mask_prob, 0.5, "dense")
+    contested = refined[0, 0, 20:44, 20:44]
+    # per-pixel min would pick 2.0 (farther member's lower value); layer-based
+    # arbitration must pick the NEARER instance's 6.0 despite the higher value
+    assert torch.allclose(contested, torch.full_like(contested, 6.0), atol=1e-3)
+
+
+def test_dense_gt_rois_no_boundary_dilution():
+    """Defect D4 regression: a uniform-depth instance must yield targets equal
+    to that depth in EVERY valid cell -- the old ROIAlign of depth*valid
+    diluted boundary cells toward zero."""
     from instancedepth.models.phase3.candidates import PairSet
     H = W = 32
-    base = torch.full((1, 1, H, W), 5.0)
     pairs = PairSet(
         batch_index=torch.tensor([0]),
         query_idx=torch.tensor([[0, 1]]),
-        boxes_norm=torch.tensor([[[0.0, 0.0, 0.5, 0.5], [0.0, 0.0, 0.5, 0.5]]]),
-        iou=torch.tensor([0.5]),
+        # member-0 box deliberately extends PAST the instance boundary
+        # (instance covers cols 0:16 = x<0.5; box spans x in [0, 0.7])
+        boxes_norm=torch.tensor([[[0.0, 0.0, 0.7, 1.0], [0.5, 0.5, 1.0, 1.0]]]),
+        iou=torch.tensor([0.3]),
     )
-    d_hat = torch.full((1, 2, 1, 14, 14), 2.0)   # both members refine to 2.0
-    mask_prob = torch.zeros(1, 2, H, W)
-    mask_prob[0, 0, 0:16, 0:16] = 1.0            # main covers top-left quadrant
-    refined = composite_refined_depth(base, pairs, d_hat, mask_prob, 0.5)
-    assert torch.allclose(refined[0, 0, 0:16, 0:16], torch.full((16, 16), 2.0), atol=1e-4)
-    assert torch.allclose(refined[0, 0, 16:, 16:], torch.full((16, 16), 5.0), atol=1e-4)
+    indices = [(torch.tensor([0, 1]), torch.tensor([0, 1]))]
+    masks = torch.zeros(2, H, W)
+    masks[0, :, 0:16] = 1.0
+    masks[1, 16:32, 16:32] = 1.0
+    targets = [{"masks": masks, "depths": torch.tensor([3.0, 4.0]),
+                "labels": torch.tensor([0, 0])}]
+    gt_depth = torch.zeros(1, 1, H, W)
+    gt_depth[0, 0, :, 0:16] = 3.0
+    gt_depth[0, 0, 16:32, 16:32] = 4.0
+    t = build_dense_gt_rois(pairs, indices, targets, gt_depth, (14, 14), 2)
+    vals = t.dt_dense[0, 0][t.dt_valid[0, 0]]
+    assert vals.numel() > 0
+    assert torch.allclose(vals, torch.full_like(vals, 3.0), atol=1e-3), (
+        f"boundary dilution detected: min target {vals.min():.3f} (expected 3.0)")
+
+
+def test_min_valid_roi_px_filters_sparse_rois():
+    """Defect D5 regression: ROIs with fewer valid GT pixels than
+    min_valid_roi_px must contribute no L_obj."""
+    P, Hp, Wp = 1, 14, 14
+    d_hat = (torch.rand(P, 2, 1, Hp, Wp) + 1.0).requires_grad_(True)
+    base_depth = torch.rand(1, 1, 32, 32) + 0.5
+    dt_valid = torch.zeros(P, 2, 1, Hp, Wp, dtype=torch.bool)
+    dt_valid[..., 0, :3] = True                                    # only 3 valid px per member
+    output = RefinedDepthOutput(
+        refined_depth=base_depth, base_depth=base_depth, image_hw=(32, 32),
+        pair_batch_index=torch.zeros(P, dtype=torch.long),
+        pair_query_idx=torch.zeros(P, 2, dtype=torch.long),
+        pair_iou=torch.zeros(P), refined_layers=torch.rand(P, 2) + 1.0,
+        base_layers=torch.rand(P, 2) + 1.0, d_hat_roi=d_hat,
+        e_obj_roi=torch.rand(P, 2, 1, Hp, Wp), d_obj_roi=d_hat.detach().clone(),
+    )
+    tgt = RefineTargets(
+        dt_scalar=torch.rand(P, 2) + 1.0, pair_valid=torch.zeros(P, dtype=torch.bool),
+        dt_dense=(torch.rand(P, 2, 1, Hp, Wp) + 1.0) * dt_valid, dt_valid=dt_valid,
+    )
+    crit = Phase3Criterion(Phase3LossConfig(min_valid_roi_px=16))
+    losses = crit(output, tgt, torch.rand(1, 1, 32, 32) + 0.5)
+    assert float(losses["l_obj"].detach()) == 0.0
 
 
 def test_build_dense_gt_rois():

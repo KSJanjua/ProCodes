@@ -31,12 +31,20 @@ from instancedepth.models.phase2.output import Phase2Output
 
 @dataclass
 class PairSet:
-    """Occlusion pairs flattened across the batch (P total)."""
+    """Occlusion pairs flattened across the batch (P total).
+
+    Pairs are UNORDERED-DEDUPLICATED (see build_pairs, defect D2 in
+    docs/PHASE3_DIAGNOSIS.md): {A,B} appears once, never as both (A,B) and
+    (B,A). Member order is canonical: index 0 = the nearer instance (smaller
+    predicted Dep, i.e. the occluder), index 1 = the farther one. This gives
+    Phi_o a consistent channel semantic and prevents the same person being
+    refined twice with disagreeing fields. [Reasonable Assumption]
+    """
 
     batch_index: torch.Tensor   # (P,) long -- which image
-    query_idx: torch.Tensor     # (P,2) long -- [main, guest] query indices into the N Phase-2 queries
-    boxes_norm: torch.Tensor    # (P,2,4) float -- normalized [0,1] xyxy for [main, guest]
-    iou: torch.Tensor           # (P,) float -- main<->guest mask IoU
+    query_idx: torch.Tensor     # (P,2) long -- [nearer/occluder, farther] query indices
+    boxes_norm: torch.Tensor    # (P,2,4) float -- normalized [0,1] xyxy, same member order
+    iou: torch.Tensor           # (P,) float -- pair overlap IoU (symmetric)
 
     def __len__(self) -> int:
         return int(self.batch_index.shape[0])
@@ -150,6 +158,13 @@ def build_pairs(p2: Phase2Output, cfg: Phase3CandidateConfig) -> PairSet:
         iou.fill_diagonal_(0.0)
         dep_c = dep[b, cand]                                 # (C,)
 
+        # Deduplicate to UNORDERED pairs (defect D2, docs/PHASE3_DIAGNOSIS.md):
+        # the paper's directional phrasing ("for each main ... retain the
+        # nearest guest") yields both (A,B) and (B,A) for a mutually
+        # overlapping pair, which wrote the same person twice with two
+        # disagreeing correction fields. Keep one entry per unordered pair,
+        # member order canonicalized nearer-first (occluder = channel 0).
+        chosen: dict = {}   # (min_q, max_q) -> ((q_near, q_far), iou)
         for i in range(cand.numel()):
             overlaps = torch.where(iou[i] > cfg.overlap_iou_thresh)[0]
             if overlaps.numel() == 0:
@@ -160,12 +175,21 @@ def build_pairs(p2: Phase2Output, cfg: Phase3CandidateConfig) -> PairSet:
                 score = dep_c[overlaps]
             guest_local = overlaps[torch.argmin(score)]
 
-            q_main = int(cand[i])
-            q_guest = int(cand[guest_local])
+            q_i, q_j = int(cand[i]), int(cand[guest_local])
+            key = (min(q_i, q_j), max(q_i, q_j))
+            if key in chosen:
+                continue
+            if float(dep[b, q_i]) <= float(dep[b, q_j]):
+                ordered = (q_i, q_j)
+            else:
+                ordered = (q_j, q_i)
+            chosen[key] = (ordered, float(iou[i, guest_local]))
+
+        for (q_near, q_far), pair_iou in chosen.values():
             all_bidx.append(b)
-            all_pairs.append(torch.tensor([q_main, q_guest], dtype=torch.long))
-            all_boxes.append(torch.stack([boxes[b, q_main], boxes[b, q_guest]]))   # (2,4)
-            all_iou.append(float(iou[i, guest_local]))
+            all_pairs.append(torch.tensor([q_near, q_far], dtype=torch.long))
+            all_boxes.append(torch.stack([boxes[b, q_near], boxes[b, q_far]]))   # (2,4)
+            all_iou.append(pair_iou)
 
     if not all_bidx:
         return PairSet.empty(device)

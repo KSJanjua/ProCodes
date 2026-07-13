@@ -166,11 +166,14 @@ class Phase3Model(nn.Module):
         refined_layers = roi_masked_mean(d_hat, roi_w)          # (P,2)
         base_layers = roi_masked_mean(d_obj, roi_w)             # (P,2)
 
-        # --- composite refined ROI depths into the dense map (P-2 frame) ---
+        # --- composite the correction RATIO into the dense map (P-2 frame) ---
+        # (eval-only artifact; the loss trains d_hat directly. See
+        # relation_head.composite_refined_depth for the ratio semantics.)
         base_p2 = F.interpolate(depth_p1, size=(H2, W2), mode="bilinear", align_corners=False)
         mask_prob = p2.mask_logits.sigmoid()
         refined_depth = composite_refined_depth(
-            base_p2, pairs, d_hat.detach(), mask_prob, cfg.candidate.mask_binarize_thresh,
+            base_p2, pairs, e_obj, refined_layers, mask_prob,
+            cfg.candidate.mask_binarize_thresh, ratio_mode=cfg.head.composite_ratio,
         )
 
         output = RefinedDepthOutput(

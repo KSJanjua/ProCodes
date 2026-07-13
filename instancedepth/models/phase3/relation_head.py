@@ -85,36 +85,77 @@ def roi_masked_mean(values: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
 
 @torch.no_grad()
 def composite_refined_depth(
-    base_depth: torch.Tensor,     # (B,1,H,W) Phase-1 depth_final
+    base_depth: torch.Tensor,       # (B,1,H,W) Phase-1 depth_final (full resolution)
     pairs: PairSet,
-    d_hat: torch.Tensor,          # (P,2,1,Hp,Wp) refined ROI depth
-    mask_prob: torch.Tensor,      # (B,N,H,W) Phase-2 mask probs
+    e_obj: torch.Tensor,            # (P,2,1,Hp,Wp) Eq. 8's relative-error field
+    refined_layers: torch.Tensor,   # (P,2) scalar refined depth per member (mask-mean of D_hat)
+    mask_prob: torch.Tensor,        # (B,N,H,W) Phase-2 mask probs
     binarize_thresh: float,
+    ratio_mode: str = "dense",      # "dense" | "scalar"
 ) -> torch.Tensor:
-    """Paste each pair member's refined ROI depth back into a clone of
-    ``base_depth`` over the member's predicted-mask footprint, resolving
-    overlaps nearest-depth-wins (occluder overwrites) -- the same convention
-    as ``data_engine/annotate.py::_flatten_id_map`` (plan SS8.5). Uncovered
-    pixels keep Phase-1 depth verbatim.
+    """Composite the refinement into the dense map as a RATIO field.
+
+    Eq. 9 simplifies algebraically: D_hat = (2E-1)*D + D = 2E * D -- the
+    refinement is a multiplicative correction ratio (2E) on the base depth.
+    So compositing applies the upsampled RATIO to the FULL-RESOLUTION base
+    depth inside each instance's mask, instead of pasting the low-resolution
+    ROI depth itself (defect D1, docs/PHASE3_DIAGNOSIS.md). Properties:
+
+      * E = 0.5 everywhere  ->  refined == base EXACTLY (true identity);
+      * the base map's fine within-person geometry is preserved and merely
+        modulated, never replaced by a 28x28 blur.
+
+    Each unique instance is written ONCE: all its pair appearances are
+    aggregated into one mean ratio field (defect D2), and cross-instance
+    contention is arbitrated by per-instance scalar LAYER depth --
+    nearest-layer-wins, mirroring data_engine/annotate.py::_flatten_id_map
+    (defect D3) -- not by per-pixel value comparison.
+
+    ratio_mode="scalar" collapses each instance's ratio to its single
+    masked-mean value: maximal within-person coherence, all remaining depth
+    variation comes from the base geometry. Compositing is not
+    paper-specified ([Strongly Inferred] glue), so this is a legitimate
+    implementation switch; the training loss always uses the dense field.
     """
+    assert ratio_mode in ("dense", "scalar")
     B, _, H, W = base_depth.shape
     refined = base_depth.clone()
-    written = base_depth.new_full((B, 1, H, W), float("inf"))
     P = len(pairs)
+    if P == 0:
+        return refined
+
+    # ---- aggregate every unique (batch, query) instance across its pairs ----
+    inst: dict = {}   # (b, q) -> {"ratios": [(1,Hp,Wp)...], "layers": [float...], "box": (4,)}
     for p in range(P):
         b = int(pairs.batch_index[p])
         for k in range(2):
             q = int(pairs.query_idx[p, k])
-            x1, y1, x2, y2 = pairs.boxes_norm[p, k].tolist()
-            X1, Y1 = int(round(x1 * W)), int(round(y1 * H))
-            X2, Y2 = int(round(x2 * W)), int(round(y2 * H))
-            X2, Y2 = max(X2, X1 + 1), max(Y2, Y1 + 1)
-            bh, bw = Y2 - Y1, X2 - X1
-            patch = F.interpolate(d_hat[p, k][None], size=(bh, bw),
-                                  mode="bilinear", align_corners=False)[0, 0]  # (bh,bw)
-            region_mask = mask_prob[b, q, Y1:Y2, X1:X2] >= binarize_thresh
-            cur = written[b, 0, Y1:Y2, X1:X2]
-            win = region_mask & (patch < cur)
-            refined[b, 0, Y1:Y2, X1:X2] = torch.where(win, patch, refined[b, 0, Y1:Y2, X1:X2])
-            written[b, 0, Y1:Y2, X1:X2] = torch.where(win, patch, cur)
+            rec = inst.setdefault((b, q), {"ratios": [], "layers": [],
+                                           "box": pairs.boxes_norm[p, k]})
+            rec["ratios"].append(2.0 * e_obj[p, k])          # Eq. 9's ratio = 2E
+            rec["layers"].append(float(refined_layers[p, k]))
+
+    layer_buf = base_depth.new_full((B, 1, H, W), float("inf"))
+    for (b, q), rec in inst.items():
+        ratio_roi = torch.stack(rec["ratios"]).mean(0)       # (1,Hp,Wp)
+        layer = sum(rec["layers"]) / len(rec["layers"])
+        x1, y1, x2, y2 = rec["box"].tolist()
+        X1, Y1 = int(round(x1 * W)), int(round(y1 * H))
+        X2, Y2 = int(round(x2 * W)), int(round(y2 * H))
+        X2, Y2 = max(X2, X1 + 1), max(Y2, Y1 + 1)
+
+        region_mask = mask_prob[b, q, Y1:Y2, X1:X2] >= binarize_thresh
+        if not bool(region_mask.any()):
+            continue
+        ratio = F.interpolate(ratio_roi[None], size=(Y2 - Y1, X2 - X1),
+                              mode="bilinear", align_corners=False)[0, 0]
+        if ratio_mode == "scalar":
+            ratio = torch.full_like(ratio, float(ratio[region_mask].mean()))
+
+        base_crop = base_depth[b, 0, Y1:Y2, X1:X2]
+        cand = ratio * base_crop                             # 2E * D at full resolution
+        cur_layer = layer_buf[b, 0, Y1:Y2, X1:X2]
+        win = region_mask & (layer < cur_layer)              # nearest-LAYER-wins (per instance)
+        refined[b, 0, Y1:Y2, X1:X2] = torch.where(win, cand, refined[b, 0, Y1:Y2, X1:X2])
+        layer_buf[b, 0, Y1:Y2, X1:X2] = torch.where(win, torch.full_like(cur_layer, layer), cur_layer)
     return refined
