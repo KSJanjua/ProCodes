@@ -11,11 +11,14 @@ Colormap conventions (documented once, used everywhere):
 from __future__ import annotations
 
 import colorsys
+import logging
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
+
+log = logging.getLogger("instancedepth.utils.viz")
 
 IMAGENET_MEAN = np.array((0.485, 0.456, 0.406), np.float32)
 IMAGENET_STD = np.array((0.229, 0.224, 0.225), np.float32)
@@ -184,13 +187,58 @@ def hstack_panels(panels: List[np.ndarray], height: Optional[int] = None) -> np.
 # --------------------------------------------------------------------------- #
 # video io
 # --------------------------------------------------------------------------- #
+_VIDEO_CODECS = (("mp4v", ".mp4"), ("MJPG", ".avi"), ("XVID", ".avi"))
+
+
+class FrameDumpWriter:
+    """cv2.VideoWriter-compatible fallback that writes numbered PNG frames.
+
+    Used when the installed OpenCV build has no usable video encoder (common
+    on headless/conda server builds without FFmpeg, where every fourcc fails
+    to open). Guarantees the tool still produces output; ``release()`` logs
+    the exact ffmpeg command to stitch the frames into a video afterwards.
+    """
+
+    def __init__(self, dir_path: Path, fps: float) -> None:
+        self.dir = Path(dir_path)
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.fps = fps
+        self._count = 0
+
+    def isOpened(self) -> bool:
+        return True
+
+    def write(self, frame: np.ndarray) -> None:
+        cv2.imwrite(str(self.dir / f"frame_{self._count:06d}.png"), frame)
+        self._count += 1
+
+    def release(self) -> None:
+        log.info(
+            "FrameDumpWriter: wrote %d PNG frames to %s -- stitch into a video with:\n"
+            "  ffmpeg -framerate %g -i %s/frame_%%06d.png -c:v libx264 -pix_fmt yuv420p %s.mp4",
+            self._count, self.dir, self.fps, self.dir, self.dir,
+        )
+
+
 def open_video_writer(path: Path, fps: float, frame_wh: Tuple[int, int]):
-    """Open a cv2.VideoWriter, preferring mp4v/.mp4 and falling back to
-    XVID/.avi. Returns (writer, actual_path)."""
-    for fourcc, suffix in (("mp4v", ".mp4"), ("XVID", ".avi")):
+    """Open a video writer, trying mp4v/.mp4, then MJPG/.avi (present in
+    virtually every FFmpeg build and free of MPEG-4 profile limits), then
+    XVID/.avi. If every encoder fails -- an OpenCV build without video
+    encoding support -- falls back to a ``FrameDumpWriter`` (numbered PNGs +
+    a logged ffmpeg stitch command) instead of crashing. Returns
+    (writer, actual_output_path)."""
+    for fourcc, suffix in _VIDEO_CODECS:
         p = Path(path).with_suffix(suffix)
         w = cv2.VideoWriter(str(p), cv2.VideoWriter_fourcc(*fourcc), fps, frame_wh)
         if w.isOpened():
+            log.info("video writer: %s -> %s", fourcc, p)
             return w, p
         w.release()
-    raise RuntimeError(f"cv2.VideoWriter failed for both mp4v and XVID at {path}")
+    dump_dir = Path(str(path) + "_frames")
+    log.warning(
+        "no cv2 video encoder could be opened (tried %s) at frame size %s -- "
+        "falling back to a PNG frame dump in %s. Check cv2.getBuildInformation() "
+        "for FFMPEG support on this machine.",
+        "/".join(c for c, _ in _VIDEO_CODECS), frame_wh, dump_dir,
+    )
+    return FrameDumpWriter(dump_dir, fps), dump_dir

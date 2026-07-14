@@ -46,6 +46,9 @@ class Phase3Inferencer:
         cfg.phase2_checkpoint = None
         self.model = Phase3Model(cfg).to(self.device)
         load_checkpoint(Path(checkpoint_path), self.model, map_location=str(self.device), restore_rng=False)
+        log.info("loaded full Phase 3 checkpoint from %s (the two 'smoke test only' "
+                 "warnings above are expected here -- the full checkpoint supersedes "
+                 "the base-phase init weights)", checkpoint_path)
         self.model.eval()
         precision = cfg.optim.precision
         self._autocast = precision != "fp32" and self.device.type == "cuda"

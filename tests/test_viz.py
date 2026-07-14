@@ -46,3 +46,38 @@ def test_colorize_depth_invalid_black():
     assert out.shape == (8, 8, 3)
     assert (out[1:, 1:] == 0).all()          # invalid (depth==0) renders black
     assert out[0, 0].sum() > 0               # valid pixel is coloured
+
+
+def test_open_video_writer_always_produces_output():
+    """Whatever encoders this OpenCV build has, open_video_writer must return
+    a usable writer -- a real codec if available, else the PNG FrameDumpWriter
+    fallback -- and writing frames must leave output on disk."""
+    import tempfile
+    from pathlib import Path
+    from instancedepth.utils.viz import open_video_writer
+
+    with tempfile.TemporaryDirectory() as td:
+        writer, out_path = open_video_writer(Path(td) / "clip", fps=10.0, frame_wh=(64, 48))
+        frame = np.zeros((48, 64, 3), np.uint8)
+        for _ in range(3):
+            writer.write(frame)
+        writer.release()
+        p = Path(out_path)
+        if p.is_dir():                                   # FrameDumpWriter fallback
+            assert len(list(p.glob("frame_*.png"))) == 3
+        else:                                            # real encoded video
+            assert p.exists() and p.stat().st_size > 0
+
+
+def test_frame_dump_writer():
+    import tempfile
+    from pathlib import Path
+    from instancedepth.utils.viz import FrameDumpWriter
+
+    with tempfile.TemporaryDirectory() as td:
+        w = FrameDumpWriter(Path(td) / "seq_frames", fps=15.0)
+        assert w.isOpened()
+        for _ in range(2):
+            w.write(np.zeros((8, 8, 3), np.uint8))
+        w.release()
+        assert len(list((Path(td) / "seq_frames").glob("frame_*.png"))) == 2

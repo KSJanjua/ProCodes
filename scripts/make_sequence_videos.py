@@ -97,6 +97,9 @@ def main() -> None:
     ap.add_argument("--inst-score-thresh", type=float, default=0.5,
                     help="category-confidence cut for predicted instances (viz-oriented, "
                          "looser than Phase 3's 0.9 candidate filter)")
+    ap.add_argument("--scale", type=float, default=1.0,
+                    help="resize the final stacked canvas by this factor before writing "
+                         "(e.g. 0.5 halves file size; also helps picky encoders with very wide frames)")
     ap.add_argument("--limit-seq", type=int, default=None, help="only the first N sequences")
     ap.add_argument("--stride", type=int, default=1, help="use every Nth frame")
     ap.add_argument("-v", "--verbose", action="store_true")
@@ -165,6 +168,11 @@ def main() -> None:
                 panels.append(put_label(draw_instances_with_depth(bgr, masks, layer_depths), inst_label))
 
             canvas = np.hstack(panels)
+            if args.scale != 1.0:
+                # even dimensions -- some encoders reject odd sizes
+                nw = max(int(canvas.shape[1] * args.scale) // 2 * 2, 2)
+                nh = max(int(canvas.shape[0] * args.scale) // 2 * 2, 2)
+                canvas = cv2.resize(canvas, (nw, nh), interpolation=cv2.INTER_AREA)
             if writer is None:
                 writer, actual_path = open_video_writer(
                     out_dir / sid.replace("/", "__"), args.fps, (canvas.shape[1], canvas.shape[0]))
