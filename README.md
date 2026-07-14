@@ -88,6 +88,7 @@ python -m scripts.visualize_phase3 --config instancedepth/configs/phase3.yaml \
     --checkpoint runs/phase3_refine/best.pth --out-dir viz/phase3
 
 # Side-by-side comparison videos from test sequences
+# (RGB | GT depth | prediction | instance masks with depth-layer labels)
 python -m scripts.make_sequence_videos --phase 3 --config instancedepth/configs/phase3.yaml \
     --checkpoint runs/phase3_refine/best.pth --out-dir videos/phase3 --include-gt
 

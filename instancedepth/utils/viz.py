@@ -10,6 +10,7 @@ Colormap conventions (documented once, used everywhere):
 
 from __future__ import annotations
 
+import colorsys
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
@@ -71,6 +72,39 @@ def overlay_masks(bgr: np.ndarray, masks: np.ndarray, alpha: float = 0.45, seed:
     for i, m in enumerate(masks):
         m = m.astype(bool)
         out[m] = ((1 - alpha) * out[m] + alpha * palette[i]).astype(np.uint8)
+    return out
+
+
+def draw_instances_with_depth(bgr: np.ndarray, masks: Sequence[np.ndarray],
+                              depths: Sequence[float], alpha: float = 0.45) -> np.ndarray:
+    """Overlay instance masks together with their depth values (metres).
+
+    Instances are drawn far-to-near so the nearest sits on top -- the same
+    occlusion-ordering convention as the dataset's id-map flattening
+    (``data_engine/annotate.py::_flatten_id_map``) and
+    ``scripts/visualize_phase2.py``. Each instance gets a golden-ratio-spaced
+    colour, a translucent fill, a contour, and its depth printed at the mask
+    centroid (dark halo + white text for legibility on any background).
+    """
+    out = bgr.copy()
+    if len(masks) == 0:
+        return out
+    order = np.argsort(-np.asarray(depths, np.float32))
+    for draw_i, idx in enumerate(order.tolist()):
+        m = np.asarray(masks[idx], bool)
+        if not m.any():
+            continue
+        hue = (draw_i * 0.61803398875) % 1.0          # colour by draw order for max separation
+        r, g, b = colorsys.hsv_to_rgb(hue, 0.65, 1.0)
+        color = np.array([b * 255, g * 255, r * 255], np.uint8)   # BGR
+        out[m] = ((1 - alpha) * out[m] + alpha * color).astype(np.uint8)
+        contours, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(out, contours, -1, [int(c) for c in color], 2)
+        ys, xs = np.nonzero(m)
+        cx, cy = int(xs.mean()), int(ys.mean())
+        label = f"{float(depths[idx]):.1f}m"
+        cv2.putText(out, label, (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4, cv2.LINE_AA)
+        cv2.putText(out, label, (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1, cv2.LINE_AA)
     return out
 
 

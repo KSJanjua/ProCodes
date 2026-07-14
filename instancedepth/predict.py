@@ -51,3 +51,60 @@ def build_depth_predictor(
         return predict, cfg.data.max_depth
 
     raise ValueError(f"phase must be 1 or 3, got {phase}")
+
+
+def build_scene_predictor(
+    phase: int, config: str, checkpoint: str, overrides: List[str] | None = None,
+    inst_score_thresh: float = 0.5, mask_binarize_thresh: float = 0.5,
+) -> Tuple[Callable[[np.ndarray], dict], float]:
+    """Like :func:`build_depth_predictor`, but the returned ``predict`` also
+    exposes per-frame instance predictions where the model has them.
+
+    ``predict(bgr)`` returns a dict:
+      depth        (H,W) float32 metric depth at the input frame's resolution
+      masks        list of (H,W) bool instance masks -- empty for Phase 1,
+                   which is holistic-only (callers fall back to GT masks)
+      mask_depths  list of float -- predicted depth layer Dep_i per mask
+
+    ``inst_score_thresh`` is a visualization-oriented category-confidence cut
+    (0.5, matching evaluate_phase2/visualize_phase2), deliberately looser than
+    Phase 3's own 0.9 candidate filter so the overlay shows what the instance
+    branch actually sees.
+    """
+    overrides = overrides or []
+    if phase == 1:
+        base_predict, max_depth = build_depth_predictor(1, config, checkpoint, overrides)
+
+        def predict(bgr: np.ndarray) -> dict:
+            return dict(depth=base_predict(bgr), masks=[], mask_depths=[])
+
+        return predict, max_depth
+
+    if phase == 3:
+        import torch
+
+        from instancedepth.configs.phase3_config import Phase3Config
+        from instancedepth.models.phase3.inference import Phase3Inferencer
+
+        cfg = Phase3Config.from_yaml_with_overrides(config, overrides)
+        inf = Phase3Inferencer(cfg, checkpoint)
+
+        def predict(bgr: np.ndarray) -> dict:
+            H, W = bgr.shape[:2]
+            out = inf.predict(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
+            p2 = out["aux"]["p2"]
+            keep = torch.where(p2.scores()[0] > inst_score_thresh)[0]
+            masks, deps = [], []
+            for q in keep.tolist():
+                m = (p2.mask_logits[0, q].sigmoid() > mask_binarize_thresh).float().cpu().numpy()
+                if m.shape != (H, W):
+                    m = cv2.resize(m, (W, H), interpolation=cv2.INTER_NEAREST)
+                m = m.astype(bool)
+                if m.any():
+                    masks.append(m)
+                    deps.append(float(p2.depth_layers[0, q]))
+            return dict(depth=out["refined"], masks=masks, mask_depths=deps)
+
+        return predict, cfg.data.max_depth
+
+    raise ValueError(f"phase must be 1 or 3, got {phase}")
