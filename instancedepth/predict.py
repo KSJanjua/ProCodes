@@ -36,6 +36,7 @@ def build_depth_predictor(
             out = inf.predict(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
             return out.depth_final[0, 0].float().cpu().numpy()
 
+        predict.reset = inf.reset_temporal_state   # sequence-boundary hook (no-op for per-frame models)
         return predict, cfg.bins.max_depth
 
     if phase == 3:
@@ -48,6 +49,7 @@ def build_depth_predictor(
         def predict(bgr: np.ndarray) -> np.ndarray:
             return inf.predict(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))["refined"]
 
+        predict.reset = inf.reset_temporal_state
         return predict, cfg.data.max_depth
 
     raise ValueError(f"phase must be 1 or 3, got {phase}")
@@ -78,6 +80,7 @@ def build_scene_predictor(
         def predict(bgr: np.ndarray) -> dict:
             return dict(depth=base_predict(bgr), masks=[], mask_depths=[])
 
+        predict.reset = getattr(base_predict, "reset", lambda: None)
         return predict, max_depth
 
     if phase == 3:
@@ -105,6 +108,7 @@ def build_scene_predictor(
                     deps.append(float(p2.depth_layers[0, q]))
             return dict(depth=out["refined"], masks=masks, mask_depths=deps)
 
+        predict.reset = inf.reset_temporal_state
         return predict, cfg.data.max_depth
 
     raise ValueError(f"phase must be 1 or 3, got {phase}")

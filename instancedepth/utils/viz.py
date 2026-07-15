@@ -27,10 +27,18 @@ IMAGENET_STD = np.array((0.229, 0.224, 0.225), np.float32)
 # --------------------------------------------------------------------------- #
 # colorization
 # --------------------------------------------------------------------------- #
-def colorize_depth(depth_m: np.ndarray, max_depth: float = 10.0) -> np.ndarray:
-    """(H,W) metric depth -> BGR. Near = warm, far = cool, invalid = black."""
+def colorize_depth(depth_m: np.ndarray, max_depth: float = 10.0,
+                   far_thresh: Optional[float] = None) -> np.ndarray:
+    """(H,W) metric depth -> BGR. Near = warm, far = cool, invalid = black.
+
+    ``far_thresh``: additionally render depth >= this value black, matching
+    how GT looks (the sensor returns 0 beyond its range, so GT is black
+    there, while a prediction would otherwise stay dark-blue). Pass the
+    dataset's max_depth for GT-comparable prediction panels."""
     d = np.asarray(depth_m, np.float32)
     valid = d > 0
+    if far_thresh is not None:
+        valid &= d < far_thresh
     norm = np.clip(d / max_depth, 0.0, 1.0)
     inv = ((1.0 - norm) * 255.0).astype(np.uint8)   # near -> 255 (TURBO's warm end)
     bgr = cv2.applyColorMap(inv, cv2.COLORMAP_TURBO)
@@ -238,9 +246,10 @@ class FrameDumpWriter:
         pattern = str(self.dir / "frame_%06d.png")
         pad = "pad=ceil(iw/2)*2:ceil(ih/2)*2"
         for codec in ("libx264", "mpeg4"):
+            quality = ["-crf", "18"] if codec == "libx264" else ["-q:v", "3"]
             cmd = [ffmpeg, "-y", "-loglevel", "error", "-framerate", f"{self.fps:g}",
-                   "-i", pattern, "-vf", pad, "-c:v", codec, "-pix_fmt", "yuv420p",
-                   str(self.stitch_target)]
+                   "-i", pattern, "-vf", pad, "-c:v", codec, *quality,
+                   "-pix_fmt", "yuv420p", str(self.stitch_target)]
             try:
                 _subprocess.run(cmd, check=True)
             except (_subprocess.CalledProcessError, OSError):
@@ -265,11 +274,15 @@ class FfmpegPipeWriter:
 
         w, h = frame_wh
         self.target = Path(target)
+        # High-quality settings: default codec rates visibly blur the fine
+        # depth-colormap gradients this project inspects, so pin quality
+        # (crf 18 ~ visually lossless for libx264; q:v 3 for mpeg4).
+        quality = ["-crf", "18"] if encoder == "libx264" else ["-q:v", "3"]
         cmd = [ffmpeg, "-y", "-loglevel", "error",
                "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}",
                "-r", f"{fps:g}", "-i", "-",
                "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-               "-c:v", encoder, "-pix_fmt", "yuv420p", str(self.target)]
+               "-c:v", encoder, *quality, "-pix_fmt", "yuv420p", str(self.target)]
         self._proc = _subprocess.Popen(cmd, stdin=_subprocess.PIPE)
         self._count = 0
 

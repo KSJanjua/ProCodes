@@ -54,6 +54,32 @@ class BinRefinementConfig:
 
 
 @dataclass
+class TemporalConfig:
+    """FlashDepth-style temporal alignment (docs/TEMPORAL_DESIGN.md).
+    Disabled by default: every existing profile stays the per-frame,
+    paper-faithful baseline bit-identically. Enabled only by the dedicated
+    stage-2 fine-tune profile (hdi_temporal.yaml)."""
+
+    enabled: bool = False
+    core: str = "convgru"              # "convgru" (dependency-free default); core is swappable by design
+    d_model: int = 128                 # recurrent working width (module stays ~1% of model params)
+    num_blocks: int = 2                # stacked ConvGRU cells
+    downsample: float = 0.1            # per-side shrink before recurrence [FlashDepth value]
+    levels: Tuple[int, ...] = (2,)     # decoder level(s) to align; 2 = F_2 (last-before-heads,
+                                       # the structural analogue of FlashDepth's placement)
+    freeze_spatial: bool = True        # stage 2a: train ONLY the temporal module
+    clip_len: int = 5                  # frames per training clip [FlashDepth video_length]
+    clip_strides: Tuple[int, ...] = (1, 2, 4, 8)   # stride augmentation; max span 4*8+1=33 frames,
+                                                    # safe for the shortest (~50-frame) sequences
+    init_checkpoint: Optional[str] = None   # trained per-frame Phase-1 weights (stage 1 product)
+
+    def __post_init__(self) -> None:
+        assert self.core in ("convgru",), f"unknown temporal.core {self.core!r}"
+        assert all(l in (0, 1, 2) for l in self.levels)
+        assert self.clip_len >= 2, "a clip needs at least 2 frames for recurrence to matter"
+
+
+@dataclass
 class CameraIntrinsics:
     """Only needed for the optional disparity auxiliary loss / diagnostics.
     None-able by design -- the faithful baseline never reads this."""
@@ -105,6 +131,7 @@ class HDIConfig:
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
     bins: BinRefinementConfig = field(default_factory=BinRefinementConfig)
     camera: CameraIntrinsics = field(default_factory=CameraIntrinsics)
+    temporal: TemporalConfig = field(default_factory=TemporalConfig)
     loss: LossConfig = field(default_factory=LossConfig)
     data: DataConfig = field(default_factory=DataConfig)
     optim: OptimConfig = field(default_factory=OptimConfig)
@@ -141,6 +168,7 @@ class HDIConfig:
             decoder=sub(DecoderConfig, "decoder"),
             bins=sub(BinRefinementConfig, "bins"),
             camera=sub(CameraIntrinsics, "camera"),
+            temporal=sub(TemporalConfig, "temporal"),
             loss=sub(LossConfig, "loss"),
             data=sub(DataConfig, "data"),
             optim=sub(OptimConfig, "optim"),

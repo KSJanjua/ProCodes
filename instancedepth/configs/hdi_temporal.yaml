@@ -1,0 +1,89 @@
+# Phase 1, stage-2 TEMPORAL fine-tune (docs/TEMPORAL_DESIGN.md).
+#
+# Attaches the zero-init TemporalAligner to the trained per-frame model
+# (stage 1 = runs/hdi_enhanced) and trains ONLY the temporal module (stage 2a,
+# freeze_spatial) on short ordered clips. Spatial architecture/loss/camera
+# settings mirror hdi_enhanced.yaml exactly -- they must, so the stage-1
+# checkpoint loads cleanly.
+#
+# Hyperparameter reasoning for THIS dataset (297 seqs, 50-300 frames each):
+#   clip_len 5, strides {1,2,4,8}  max clip span = 33 frames, safe for the
+#                                  shortest sequences; strides teach the
+#                                  module to bridge larger motion (FlashDepth
+#                                  stride augmentation).
+#   lr 1e-4                        FlashDepth's temporal-module LR; the only
+#                                  trainable params are the ~2M-param aligner.
+#   total_iters 8000, batch 2      ~16k clips ~ 80k frame-visits for a 2M-param
+#                                  module on top of a frozen backbone -- ample
+#                                  without overfitting the 237-sequence train split.
+#   warmup 500                     avoids an early LR spike on the fresh module.
+
+run_name: "hdi_temporal"
+run_root: "runs"
+seed: 2026
+
+backbone:
+  name: "facebook/dinov2-large"
+  checkpoint_path: "/home/work/intern_storage/Ayush/weights/dinov2_vitl14.safetensors"
+  hook_layers: [5, 14, 23]
+  freeze: false          # requires_grad handled by freeze_spatial below
+  allow_hub_download: false
+
+decoder:
+  target_fractions: [0.125, 0.25, 0.5]
+  patch_kernels: [16, 8, 4]
+  channels_dec: 256
+  channels_attn: 256
+  attn_heads: 8
+  attn_blocks: 1
+
+bins:
+  rd: 5
+  max_depth: 10.0
+
+camera:
+  focal_px: 860.0
+  width_px: 2208
+  source: "config"
+
+temporal:
+  enabled: true
+  core: "convgru"
+  d_model: 128
+  num_blocks: 2
+  downsample: 0.1
+  levels: [2]                  # F_2: last decoder feature before the heads
+  freeze_spatial: true         # stage 2a; set false + lower lr for stage 2b
+  clip_len: 5
+  clip_strides: [1, 2, 4, 8]
+  init_checkpoint: "runs/hdi_enhanced/best.pth"   # the stage-1 product
+
+loss:
+  regression: "silog"
+  silog_lambda: 0.5
+  deep_supervision_weights: [0.5, 0.25]
+  bin_bce_weight: 1.0
+  disparity_aux_weight: 0.5    # mirrors hdi_enhanced (the init checkpoint's regime)
+
+data:
+  annotations_root: "gid_custom"
+  image_size: [728, 1288]
+  min_instance_px: 64
+  hflip_prob: 0.5
+  color_jitter: 0.0
+
+optim:
+  lr: 1.0e-4                   # only the temporal module trains (head group)
+  backbone_lr_mult: 1.0
+  head_lr_mult: 1.0
+  weight_decay: 0.01
+  total_iters: 8000
+  warmup_iters: 500
+  poly_power: 0.9
+  grad_clip_norm: 1.0
+  precision: "bf16"
+  batch_size: 2                # 2 clips x 5 frames; backbone runs grad-free
+  num_workers: 4
+  log_every: 50
+  ckpt_every: 1000
+  eval_every: 1000

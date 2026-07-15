@@ -58,7 +58,8 @@ _FRAME_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}
 
 def colorize(depth: np.ndarray, mode: str, max_depth: float) -> np.ndarray:
     if mode == "metric":
-        return colorize_depth(depth, max_depth)
+        # far_thresh: beyond the sensor range render black, matching GT panels
+        return colorize_depth(depth, max_depth, far_thresh=max_depth)
     lo, hi = np.percentile(depth, [2, 98])
     span = max(hi - lo, 1e-6)
     return colorize_depth(np.clip(depth - lo, 0, None) + 1e-3, span)   # per-frame relative

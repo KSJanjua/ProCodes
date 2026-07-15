@@ -82,6 +82,12 @@ class Phase3Model(nn.Module):
         self._freeze_phase2()
 
     # ------------------------------------------------------------------ #
+    def reset_temporal_state(self) -> None:
+        """Passthrough to Phase 1's temporal memory (no-op for per-frame
+        Phase-1 checkpoints). Call at sequence boundaries when streaming."""
+        if hasattr(self.phase1, "reset_temporal_state"):
+            self.phase1.reset_temporal_state()
+
     def _freeze_phase2(self) -> None:
         for p in self.phase2.parameters():
             p.requires_grad_(False)
@@ -174,6 +180,7 @@ class Phase3Model(nn.Module):
         refined_depth = composite_refined_depth(
             base_p2, pairs, e_obj, refined_layers, mask_prob,
             cfg.candidate.mask_binarize_thresh, ratio_mode=cfg.head.composite_ratio,
+            feather_px=cfg.head.composite_feather_px,
         )
 
         output = RefinedDepthOutput(

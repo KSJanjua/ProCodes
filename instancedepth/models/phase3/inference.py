@@ -51,6 +51,7 @@ class Phase3Inferencer:
                  "the base-phase init weights)", checkpoint_path)
         self.model.eval()
         precision = cfg.optim.precision
+        self.reset_temporal_state = self.model.reset_temporal_state   # sequence-boundary hook
         self._autocast = precision != "fp32" and self.device.type == "cuda"
         self._dtype = _PRECISION_DTYPE[precision]
 

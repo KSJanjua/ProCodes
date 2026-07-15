@@ -60,7 +60,7 @@ optim:
   head_lr_mult: 10.0
   weight_decay: 0.01
   total_iters: 55000
-  warmup_iters: 0
+  warmup_iters: 500
   poly_power: 0.9
   grad_clip_norm: 2.0
   precision: "bf16"

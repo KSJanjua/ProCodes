@@ -23,6 +23,7 @@ from instancedepth.models.backbone.dinov2_wrapper import DINOv2Backbone
 from instancedepth.models.hdi.depth_range_decoder import DepthRangeFeatureDecoder
 from instancedepth.models.hdi.iterative_refinement import IterativeBinRefinement
 from instancedepth.models.hdi.output import HolisticDepthOutput
+from instancedepth.models.hdi.temporal import TemporalAligner
 
 
 class HolisticDepthModel(nn.Module):
@@ -39,11 +40,37 @@ class HolisticDepthModel(nn.Module):
             feat_channels=cfg.decoder.channels_attn,
             cfg=cfg.bins,
         )
+        # FlashDepth-style temporal alignment (docs/TEMPORAL_DESIGN.md):
+        # inserted between decoder and refinement heads, one aligner per
+        # configured level. Absent (None) when disabled -> per-frame baseline
+        # is bit-identical.
+        if cfg.temporal.enabled:
+            self.temporal_aligners = nn.ModuleDict({
+                str(lvl): TemporalAligner(
+                    feat_channels=cfg.decoder.channels_attn,
+                    d_model=cfg.temporal.d_model,
+                    num_blocks=cfg.temporal.num_blocks,
+                    downsample=cfg.temporal.downsample,
+                ) for lvl in cfg.temporal.levels
+            })
+        else:
+            self.temporal_aligners = None
+
+    def reset_temporal_state(self) -> None:
+        """Zero the temporal memory at sequence boundaries (no-op when the
+        temporal module is disabled)."""
+        if self.temporal_aligners is not None:
+            for aligner in self.temporal_aligners.values():
+                aligner.reset_state()
 
     def forward(self, image: torch.Tensor) -> HolisticDepthOutput:
         H, W = image.shape[-2:]
         backbone_feats = self.backbone(image)
         decoder_feats = self.decoder(backbone_feats)
+        if self.temporal_aligners is not None:
+            for lvl_str, aligner in self.temporal_aligners.items():
+                lvl = int(lvl_str)
+                decoder_feats.levels[lvl] = aligner(decoder_feats.levels[lvl])
         trace = self.refinement(decoder_feats)
 
         depth_final = F.interpolate(trace.final_depth, size=(H, W), mode="bilinear", align_corners=False)

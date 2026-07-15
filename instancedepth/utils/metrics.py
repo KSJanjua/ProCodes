@@ -36,6 +36,19 @@ def compute_depth_metrics(pred: torch.Tensor, gt: torch.Tensor, mask: torch.Tens
 
 
 @torch.no_grad()
+def temporal_alignment_error(pred: torch.Tensor, pred_prev: torch.Tensor,
+                             gt: torch.Tensor, gt_prev: torch.Tensor,
+                             mask: torch.Tensor) -> float:
+    """First-order temporal consistency: mean |dpred - dgt| over pixels valid
+    in BOTH frames, where dx = x_t - x_{t-1}. A prediction that tracks GT
+    perfectly scores 0 regardless of camera/object motion (the motion appears
+    in both deltas), so no optical flow is needed -- valid here because the
+    dataset has per-frame metric GT. Returns NaN when no pixel is valid."""
+    diff = ((pred - pred_prev) - (gt - gt_prev)).abs()[mask]
+    return float(diff.mean()) if diff.numel() else float("nan")
+
+
+@torch.no_grad()
 def compute_disparity_diagnostics(
     pred: torch.Tensor, gt: torch.Tensor, mask: torch.Tensor, intrinsics: CameraIntrinsics
 ) -> Optional[Dict[str, float]]:

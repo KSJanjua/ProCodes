@@ -138,6 +138,8 @@ def main() -> None:
             man = json.load(f)
         frame_keys = sorted(man["frames"].keys())[:: args.stride]
         log.info("[%d/%d] %s (%d frames)", si + 1, len(seq_ids), sid, len(frame_keys))
+        if hasattr(predict, "reset"):
+            predict.reset()   # temporal models: fresh memory per sequence
 
         writer = None
         actual_path = None
@@ -155,9 +157,9 @@ def main() -> None:
                 gt = GIDInstanceDepthDataset._load_depth(frame, man["depth_scale_to_m"])
                 if gt.shape != (H, W):
                     gt = cv2.resize(gt, (W, H), interpolation=cv2.INTER_NEAREST)
-                panels.append(put_label(colorize_depth(gt, max_depth), "GT depth"))
+                panels.append(put_label(colorize_depth(gt, max_depth, far_thresh=max_depth), "GT depth"))
             label = "Phase-3 refined" if args.phase == 3 else "Phase-1 depth"
-            panels.append(put_label(colorize_depth(depth, max_depth), label))
+            panels.append(put_label(colorize_depth(depth, max_depth, far_thresh=max_depth), label))
             if inst_mode != "none":
                 if inst_mode == "pred":
                     masks, layer_depths = pred["masks"], pred["mask_depths"]

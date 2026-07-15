@@ -55,6 +55,12 @@ class HDIInferencer:
         load_checkpoint(Path(checkpoint_path), self.model, map_location=str(self.device), restore_rng=False)
         self.model.eval()
 
+    def reset_temporal_state(self) -> None:
+        """Zero the temporal memory (no-op for per-frame models). Call at
+        sequence boundaries when streaming a temporal model frame by frame."""
+        if hasattr(self.model, "reset_temporal_state"):
+            self.model.reset_temporal_state()
+
     @torch.no_grad()
     def predict(self, rgb_uint8_hwc: np.ndarray) -> HolisticDepthOutput:
         orig_h, orig_w = rgb_uint8_hwc.shape[:2]

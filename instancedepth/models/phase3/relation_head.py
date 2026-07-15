@@ -92,6 +92,7 @@ def composite_refined_depth(
     mask_prob: torch.Tensor,        # (B,N,H,W) Phase-2 mask probs
     binarize_thresh: float,
     ratio_mode: str = "dense",      # "dense" | "scalar"
+    feather_px: int = 0,            # soft-blend width at mask boundaries (0 = hard edge)
 ) -> torch.Tensor:
     """Composite the refinement into the dense map as a RATIO field.
 
@@ -116,6 +117,11 @@ def composite_refined_depth(
     variation comes from the base geometry. Compositing is not
     paper-specified ([Strongly Inferred] glue), so this is a legitimate
     implementation switch; the training loss always uses the dense field.
+
+    feather_px > 0 ramps the correction in over that many pixels at the mask
+    boundary (box-blurred mask as blend alpha) instead of switching on at a
+    hard edge -- a ratio != 1 hard edge otherwise shows as a ring/outline
+    around instances in the depth colormap.
     """
     assert ratio_mode in ("dense", "scalar")
     B, _, H, W = base_depth.shape
@@ -154,6 +160,14 @@ def composite_refined_depth(
 
         base_crop = base_depth[b, 0, Y1:Y2, X1:X2]
         cand = ratio * base_crop                             # 2E * D at full resolution
+        if feather_px > 0:
+            # box-blur the binary mask into a soft alpha: the correction ramps
+            # in over ~feather_px pixels instead of switching at a hard edge
+            k = 2 * feather_px + 1
+            alpha = F.avg_pool2d(region_mask.float()[None, None], k, stride=1,
+                                 padding=feather_px, count_include_pad=False)[0, 0]
+            alpha = alpha * region_mask.float()              # never write outside the mask
+            cand = alpha * cand + (1.0 - alpha) * base_crop
         cur_layer = layer_buf[b, 0, Y1:Y2, X1:X2]
         win = region_mask & (layer < cur_layer)              # nearest-LAYER-wins (per instance)
         refined[b, 0, Y1:Y2, X1:X2] = torch.where(win, cand, refined[b, 0, Y1:Y2, X1:X2])

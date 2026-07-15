@@ -86,6 +86,12 @@ class Phase3HeadConfig:
     roi_sampling_ratio: int = 2            # torchvision roi_align sampling_ratio
     refine_granularity: str = "dense"      # "dense" (Reading D, primary) | "scalar" (Reading H)
                                            # -- user-approved dense-primary (see docs/PHASE3_DESIGN.md)
+    composite_feather_px: int = 0          # soft-blend width (px) at instance-mask boundaries when
+                                           # compositing: 0 = hard edge (faithful default). A hard
+                                           # ratio!=1 edge shows as a visible ring/outline around
+                                           # instances in the refined depth; feathering blends the
+                                           # correction over this many pixels so object separations
+                                           # come from the depth itself, not composite seams.
     composite_ratio: str = "dense"         # how the Eq.9 ratio (2E) is composited into the dense
                                            # map at inference: "dense" = per-pixel field (faithful
                                            # to the dense reading), "scalar" = one masked-mean
