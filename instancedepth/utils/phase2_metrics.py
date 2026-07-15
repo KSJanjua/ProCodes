@@ -1,12 +1,16 @@
 """Phase 2 evaluation metrics.
 
-Deliberately a lighter-weight suite than full COCO-style AP (which would
-pull in `pycocotools` and a COCO-format conversion step for comparatively
-little benefit at this project's stage): greedy best-IoU matching between
-predictions and GT per image, mask IoU / precision / recall at a fixed IoU
-threshold, and depth-layer MAE on matched pairs. If COCO AP is wanted later
-for external comparability, it can be added without touching this module's
-callers (`evaluate_phase2.py`).
+Two suites, reported side by side:
+
+1. **Project metrics** -- greedy best-IoU matching at a fixed IoU threshold:
+   precision / recall / F1 / mean IoU, plus depth-layer MAE on matched pairs
+   (the depth layer is this paper's addition, so no standard metric covers it).
+2. **COCO-style mask AP** (``compute_mask_ap``) -- AP, AP50, AP75, APs, APm,
+   APl: exactly what Mask2Former reports, giving externally comparable numbers.
+   Implemented standalone against the COCO protocol rather than depending on
+   ``pycocotools`` (absent here, and it would need a COCO-format conversion
+   step) -- the same "reimplement the well-known algorithm rather than vendor
+   a heavy dependency" choice already made for ``point_sample.py``.
 
 The **occlusion-focused slice** (frames with >=2 overlapping GT instances)
 is the primary metric this redesign is judged against --
@@ -15,9 +19,24 @@ implemented here as a boolean mask over frames, applied by the caller.
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Sequence, Tuple
 
+import numpy as np
 import torch
+
+
+@torch.no_grad()
+def mask_quality_scores(mask_prob: torch.Tensor, binarize_thresh: float = 0.5) -> torch.Tensor:
+    """(B,N,H,W) sigmoid probs -> (B,N) mask confidence = mean foreground
+    probability over the binarized mask -- Mask2Former's own mask-quality
+    term (its ``instance_inference`` multiplies it with class confidence to
+    form the final instance score). Lives here rather than in the Phase-3
+    candidate code because it is a Phase-2/Mask2Former concept that both the
+    Phase-2 evaluator and Phase 3's candidate filter consume."""
+    fg = (mask_prob >= binarize_thresh).float()
+    num = (mask_prob * fg).flatten(2).sum(-1)
+    den = fg.flatten(2).sum(-1).clamp_min(1.0)
+    return num / den
 
 
 @torch.no_grad()
@@ -147,3 +166,146 @@ def aggregate(frame_metrics: List[Dict[str, float]]) -> Dict[str, float]:
         depth_mae=sum(depth_maes) / len(depth_maes) if depth_maes else float("nan"),
         num_frames=len(frame_metrics),
     )
+
+
+# --------------------------------------------------------------------------- #
+# COCO-style mask AP (the metric Mask2Former itself reports)
+# --------------------------------------------------------------------------- #
+# COCO protocol constants (cocoeval.py's Params for iouType='segm').
+_IOU_THRESHOLDS = np.linspace(0.5, 0.95, 10)          # .50:.05:.95
+_RECALL_POINTS = np.linspace(0.0, 1.0, 101)           # 101-point interpolation
+_AREA_RANGES: Dict[str, Tuple[float, float]] = {
+    "all": (0.0, float("inf")),
+    "small": (0.0, 32.0 ** 2),
+    "medium": (32.0 ** 2, 96.0 ** 2),
+    "large": (96.0 ** 2, float("inf")),
+}
+
+
+def _match_image(iou: np.ndarray, gt_ignore: np.ndarray, thr: float) -> np.ndarray:
+    """COCO's per-image greedy matcher (cocoeval.evaluateImg) at one IoU
+    threshold. ``iou`` is (D,G) with detections already sorted by descending
+    score and GT sorted non-ignored-first. Returns (D,) matched GT index, or
+    -1 for unmatched -- the caller derives TP/FP/ignore from it."""
+    D, G = iou.shape
+    gt_matched = np.full(G, False)
+    dt_match = np.full(D, -1, dtype=int)
+    for d in range(D):
+        best_iou, best_g = thr, -1
+        for g in range(G):
+            if gt_matched[g] and not gt_ignore[g]:
+                continue                      # real GT already taken
+            if best_g > -1 and not gt_ignore[best_g] and gt_ignore[g]:
+                break                         # had a real match; rest are ignored GT
+            if iou[d, g] < best_iou:
+                continue
+            best_iou, best_g = iou[d, g], g
+        if best_g == -1:
+            continue
+        dt_match[d] = best_g
+        gt_matched[best_g] = True
+    return dt_match
+
+
+def _average_precision(tp: np.ndarray, fp: np.ndarray, n_gt: int) -> float:
+    """COCO's 101-point interpolated AP from score-sorted TP/FP flags."""
+    if n_gt == 0:
+        return float("nan")                   # no positives -> AP undefined for this slice
+    tp_cum, fp_cum = np.cumsum(tp), np.cumsum(fp)
+    rc = tp_cum / n_gt
+    pr = tp_cum / np.maximum(tp_cum + fp_cum, np.finfo(np.float64).eps)
+    # make precision monotonically non-increasing (COCO smooths right-to-left)
+    for i in range(len(pr) - 1, 0, -1):
+        if pr[i] > pr[i - 1]:
+            pr[i - 1] = pr[i]
+    idx = np.searchsorted(rc, _RECALL_POINTS, side="left")
+    q = np.zeros(len(_RECALL_POINTS))
+    for ri, pi in enumerate(idx):
+        if pi < len(pr):
+            q[ri] = pr[pi]
+    return float(q.mean())
+
+
+@torch.no_grad()
+def compute_mask_ap(images: Sequence[Dict[str, torch.Tensor]]) -> Dict[str, float]:
+    """COCO-style mask AP over a list of per-image predictions.
+
+    Each item: ``dict(pred_masks=(D,H,W) bool, scores=(D,), gt_masks=(G,H,W) bool)``.
+    Detections must NOT be score-thresholded -- AP ranks them by score, so a
+    cut would silently truncate the precision-recall curve. ``scores`` should
+    be Mask2Former's own instance score (class confidence x mask quality).
+
+    Returns AP (mean over IoU .50:.05:.95), AP50, AP75, and APs/APm/APl
+    (GT area bands 32^2 / 96^2, COCO's ignore semantics: detections matched to
+    an out-of-band GT are ignored, and unmatched detections count as FP only
+    if their own area falls in the band).
+    """
+    per_image = []
+    for im in images:
+        pm, gm = im["pred_masks"], im["gt_masks"]
+        scores = im["scores"].detach().float().cpu().numpy() if len(im["scores"]) else np.zeros(0)
+        order = np.argsort(-scores, kind="mergesort")     # stable, descending
+        iou = mask_iou_matrix(pm.bool(), gm.bool()).detach().float().cpu().numpy() if len(pm) and len(gm) \
+            else np.zeros((len(pm), len(gm)))
+        per_image.append(dict(
+            scores=scores[order],
+            iou=iou[order] if len(pm) else iou,
+            dt_area=(pm.flatten(1).sum(1).detach().float().cpu().numpy()[order] if len(pm) else np.zeros(0)),
+            gt_area=(gm.flatten(1).sum(1).detach().float().cpu().numpy() if len(gm) else np.zeros(0)),
+        ))
+
+    out: Dict[str, float] = {}
+    ap_per_range: Dict[str, List[float]] = {k: [] for k in _AREA_RANGES}
+    ap50 = ap75 = None
+
+    for rng_name, (lo, hi) in _AREA_RANGES.items():
+        for thr in _IOU_THRESHOLDS:
+            all_scores, all_tp, all_fp = [], [], []
+            n_gt = 0
+            for im in per_image:
+                gt_ig = (im["gt_area"] < lo) | (im["gt_area"] >= hi)
+                n_gt += int((~gt_ig).sum())
+                D = len(im["scores"])
+                if D == 0:
+                    continue
+                # COCO sorts GT non-ignored-first so the matcher prefers real GT
+                gorder = np.argsort(gt_ig, kind="mergesort")
+                iou_s = im["iou"][:, gorder] if im["iou"].size else im["iou"]
+                gt_ig_s = gt_ig[gorder]
+                m = _match_image(iou_s, gt_ig_s, float(thr)) if iou_s.size else np.full(D, -1, dtype=int)
+
+                matched = m > -1
+                dt_ig = np.where(matched, gt_ig_s[np.clip(m, 0, None)], False)
+                # unmatched detections outside the area band are ignored, not FP
+                dt_ig |= ~matched & ((im["dt_area"] < lo) | (im["dt_area"] >= hi))
+                all_scores.append(im["scores"])
+                all_tp.append(matched & ~dt_ig)
+                all_fp.append(~matched & ~dt_ig)
+
+            if all_scores:
+                s = np.concatenate(all_scores)
+                order = np.argsort(-s, kind="mergesort")   # global rank ACROSS images (COCO)
+                tp = np.concatenate(all_tp)[order].astype(np.float64)
+                fp = np.concatenate(all_fp)[order].astype(np.float64)
+            else:
+                # No detections: recall 0 -> AP 0. (_average_precision still
+                # returns NaN if there were no positives to find either.)
+                tp = fp = np.zeros(0, dtype=np.float64)
+            ap = _average_precision(tp, fp, n_gt)
+            ap_per_range[rng_name].append(ap)
+            if rng_name == "all" and abs(thr - 0.50) < 1e-9:
+                ap50 = ap
+            if rng_name == "all" and abs(thr - 0.75) < 1e-9:
+                ap75 = ap
+
+    def _mean(vals: List[float]) -> float:
+        keep = [v for v in vals if v == v]                # drop NaN slices
+        return float(np.mean(keep)) if keep else float("nan")
+
+    out["AP"] = _mean(ap_per_range["all"])
+    out["AP50"] = ap50 if ap50 is not None else float("nan")
+    out["AP75"] = ap75 if ap75 is not None else float("nan")
+    out["APs"] = _mean(ap_per_range["small"])
+    out["APm"] = _mean(ap_per_range["medium"])
+    out["APl"] = _mean(ap_per_range["large"])
+    return out

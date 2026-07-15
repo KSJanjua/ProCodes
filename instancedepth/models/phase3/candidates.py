@@ -35,6 +35,7 @@ import torch
 
 from instancedepth.configs.phase3_config import Phase3CandidateConfig
 from instancedepth.models.phase2.output import Phase2Output
+from instancedepth.utils.phase2_metrics import mask_quality_scores
 
 
 @dataclass
@@ -71,15 +72,6 @@ class PairSet:
             torch.zeros(0, 2, 4, dtype=torch.float32, device=device),
             torch.zeros(0, dtype=torch.float32, device=device),
         )
-
-
-def mask_quality_scores(mask_prob: torch.Tensor, binarize_thresh: float) -> torch.Tensor:
-    """(B,N,H,W) sigmoid probs -> (B,N) scalar mask confidence = mean
-    foreground probability over the binarized mask (Mask2Former convention)."""
-    fg = (mask_prob >= binarize_thresh).float()
-    num = (mask_prob * fg).flatten(2).sum(-1)
-    den = fg.flatten(2).sum(-1).clamp_min(1.0)
-    return num / den
 
 
 def boxes_and_masks_from_probs(mask_prob: torch.Tensor, binarize_thresh: float):

@@ -27,7 +27,9 @@ from instancedepth.configs.phase2_config import Phase2Config
 from instancedepth.engine.train_phase2 import build_dataloader
 from instancedepth.models.phase2.model import Phase2Model
 from instancedepth.utils.checkpoint import load_checkpoint
-from instancedepth.utils.phase2_metrics import aggregate, evaluate_frame, has_overlapping_instances
+from instancedepth.utils.phase2_metrics import (
+    aggregate, compute_mask_ap, evaluate_frame, has_overlapping_instances, mask_quality_scores,
+)
 
 log = logging.getLogger("instancedepth.engine.evaluate_phase2")
 
@@ -47,6 +49,7 @@ def evaluate(
 ) -> Dict[str, Dict[str, float]]:
     model.eval()
     all_frames, occlusion_frames = [], []
+    ap_images, ap_images_occ = [], []   # unthresholded detections for COCO AP
 
     # Match Trainer.train_step's precision (see evaluate_hdi.py's identical
     # fix) -- forwarding a Swin-L Mask2Former + ViT-scale query heads in
@@ -76,14 +79,27 @@ def evaluate(
 
             frame_result = evaluate_frame(pred_masks, pred_scores, pred_depths, gt_masks, gt_depths, iou_threshold)
             all_frames.append(frame_result)
+
+            # COCO AP: rank-based, so detections must NOT be score-filtered.
+            # Score = class confidence x mask quality -- Mask2Former's own
+            # instance score (its instance_inference multiplies exactly these).
+            ap_scores = scores[b] * mask_quality_scores(mask_probs[b][None], mask_threshold)[0]
+            ap_entry = dict(pred_masks=(mask_probs[b] > mask_threshold).cpu(),
+                            scores=ap_scores.float().cpu(), gt_masks=gt_masks.cpu())
+            ap_images.append(ap_entry)
+
             if has_overlapping_instances(gt_masks):
                 occlusion_frames.append(frame_result)
+                ap_images_occ.append(ap_entry)
 
+    empty_proj = dict(precision=float("nan"), recall=float("nan"), f1=float("nan"),
+                      mean_iou=float("nan"), depth_mae=float("nan"), num_frames=0)
     return dict(
         overall=aggregate(all_frames),
-        occlusion_slice=aggregate(occlusion_frames) if occlusion_frames else
-        dict(precision=float("nan"), recall=float("nan"), f1=float("nan"),
-             mean_iou=float("nan"), depth_mae=float("nan"), num_frames=0),
+        occlusion_slice=aggregate(occlusion_frames) if occlusion_frames else empty_proj,
+        overall_coco_ap=compute_mask_ap(ap_images),
+        occlusion_coco_ap=compute_mask_ap(ap_images_occ) if ap_images_occ else
+        {k: float("nan") for k in ("AP", "AP50", "AP75", "APs", "APm", "APl")},
     )
 
 
@@ -96,6 +112,8 @@ def make_eval_fn(cfg: Phase2Config, max_batches: int = 50):
         # flatten for TensorBoard scalar logging (Trainer expects Dict[str, float])
         flat = {f"overall_{k}": v for k, v in result["overall"].items()}
         flat.update({f"occlusion_{k}": v for k, v in result["occlusion_slice"].items()})
+        flat.update({f"coco_{k}": v for k, v in result["overall_coco_ap"].items()})
+        flat.update({f"coco_occ_{k}": v for k, v in result["occlusion_coco_ap"].items()})
         # Trainer's best-checkpoint selection looks for "abs_rel" (Phase 1
         # convention); Phase 2's analogous "lower is better" signal is
         # depth_mae -- exposed under both names so Trainer's generic logic

@@ -46,6 +46,9 @@ loss:
   deep_supervision_weights: [0.5, 0.25]
   bin_bce_weight: 1.0
   disparity_aux_weight: 0.5   # enabled
+  gradient_matching_weight: 0.5   # sharpen depth edges (Eigen 2015 / MiDaS L_reg);
+                                 # SigLog is pointwise and cannot penalize blur
+  gradient_matching_scales: 4
 
 data:
   annotations_root: "gid_custom"

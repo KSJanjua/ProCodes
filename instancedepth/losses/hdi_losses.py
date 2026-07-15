@@ -62,6 +62,51 @@ class SigLogLoss(nn.Module):
         return torch.sqrt(variance.clamp_min(0.0))
 
 
+class GradientMatchingLoss(nn.Module):
+    """Multi-scale gradient matching (Eigen & Fergus, ICCV 2015; MiDaS/DPT's
+    ``L_reg``): penalizes |grad| of the log-depth *residual* R = log(pred) -
+    log(gt) at several scales.
+
+    Why it complements SigLog: SigLog is a pointwise statistic -- it is
+    indifferent to *where* error sits, so a prediction that smears a depth
+    discontinuity over many pixels can score as well as a sharp one. The
+    gradient term is minimized only when the prediction's depth *edges*
+    coincide with the ground truth's, which is what sharpens object
+    boundaries. Standard practice for single-sensor metric depth since Eigen
+    2015; InstanceDepth specifies no Phase-1 loss, so this is an opt-in
+    addition (``loss.gradient_matching_weight``), off in the faithful profile.
+
+    Scales are strided subsamples (MiDaS's scheme): scale k uses every 2^k-th
+    pixel, so one term sees fine edges and coarser terms see structure.
+    Gradients are only counted where BOTH neighbouring pixels have valid GT,
+    so sensor holes never manufacture a fake edge.
+    """
+
+    def __init__(self, scales: int = 4) -> None:
+        super().__init__()
+        self.scales = scales
+
+    @staticmethod
+    def _grad_sum(r: torch.Tensor, m: torch.Tensor):
+        dx, mx = (r[..., :, 1:] - r[..., :, :-1]).abs(), m[..., :, 1:] & m[..., :, :-1]
+        dy, my = (r[..., 1:, :] - r[..., :-1, :]).abs(), m[..., 1:, :] & m[..., :-1, :]
+        return dx[mx].sum() + dy[my].sum(), mx.sum() + my.sum()
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        if mask.sum() == 0:
+            return pred.sum() * 0.0
+        r = torch.log(target.clamp_min(_EPS)) - torch.log(pred.clamp_min(_EPS))
+        r = r * mask                      # invalid pixels contribute nothing
+        total = pred.sum() * 0.0
+        count = 0
+        for k in range(self.scales):
+            step = 2 ** k
+            s, c = self._grad_sum(r[..., ::step, ::step], mask[..., ::step, ::step])
+            total = total + s
+            count = count + c
+        return total / count.clamp_min(1)
+
+
 class L1Loss(nn.Module):
     def forward(self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         if mask.sum() == 0:
@@ -157,8 +202,10 @@ class HDILoss(nn.Module):
         self.deep_supervision_weights = cfg.deep_supervision_weights
         self.bin_bce_weight = cfg.bin_bce_weight
         self.disparity_aux_weight = cfg.disparity_aux_weight
+        self.gradient_matching_weight = cfg.gradient_matching_weight
         self.camera = camera
         self.bin_bce = OrdinalBinBCE(rd, max_depth)
+        self.gradient_matching = GradientMatchingLoss(cfg.gradient_matching_scales)
         if self.disparity_aux_weight > 0:
             assert camera is not None and camera.focal_px and camera.width_px, (
                 "HDILoss constructed with disparity_aux_weight > 0 but no "
@@ -189,6 +236,10 @@ class HDILoss(nn.Module):
             mask_i = gt_i > 0
             bin_bce_total = bin_bce_total + self.bin_bce(s_i, gt_i, mask_i)
         losses["bin_bce"] = self.bin_bce_weight * bin_bce_total
+
+        if self.gradient_matching_weight > 0:
+            losses["gradient_matching"] = self.gradient_matching_weight * \
+                self.gradient_matching(depth_final, gt_depth, mask)
 
         if self.disparity_aux_weight > 0:
             disp_pred = depth_to_canonical_disparity(depth_final, self.camera)

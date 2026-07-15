@@ -112,7 +112,90 @@ unchanged dense metrics.
   instance *panel*'s contour drawing is intentional (it's an annotation
   overlay); the depth panels now carry no boundary markings.
 
-## 5. Orchestration
+## 5. Loss-function audit (is SigLog wrong for a single-source dataset?)
+
+**Short answer: no — the concern conflates two different losses.** But the
+audit did surface a real, separate gap, now fixed (§5.3).
+
+### 5.1 SSI vs SILog — the distinction that matters
+
+| | **SSI / `L_ssi`** (MiDaS, DPT, DAv2-*relative*) | **SILog / SigLog** (Eigen 2014; what we use) |
+|---|---|---|
+| Form | least-squares align pred to GT in **scale and shift**, then compare | `sqrt(mean(d²) − λ·mean(d)²)`, `d = log(gt) − log(pred)` |
+| Absolute scale | **discarded entirely** | **penalized** (for λ<1) |
+| Why it exists | training on **mixed sources** with unknown/inconsistent scale | training on **one calibrated sensor** with metric GT |
+
+The loss the concern describes — the multi-source one that throws away metric
+scale — is **SSI**, and this project does **not** use it. `SigLogLoss`'s
+docstring explicitly rejects it for exactly that reason.
+
+SILog with λ<1 is *not* scale-invariant. Substituting `pred → α·pred`
+(i.e. `d → d − log α`):
+
+```
+mean(d²) − λ·mean(d)²  →  [mean(d²) − λ·mean(d)²] + (1−λ)·[(log α)² − 2·log α·mean(d)]
+```
+
+The extra term vanishes **only at λ = 1**. At the configured **λ = 0.5 a pure
+metric-scale error is penalized** — verified as an executable test
+(`test_siglog_penalizes_absolute_scale`: λ=0.5 scores >0.05 on a 25% scale
+error, λ=1.0 scores ~0, and a larger scale error costs strictly more).
+
+Corroboration: SILog λ∈[0.5, 0.85] is the standard loss of essentially every
+**single-sensor** metric-depth model — Eigen (NYU), BTS, AdaBins, NeWCRFs,
+ZoeDepth, DAv2-metric — all trained on one sensor (KITTI or NYU). It is the
+right family here. Phase 3 additionally has no choice: Eq. 10 *specifies*
+SigLog, citing Eigen [16].
+
+### 5.2 λ is worth sweeping (the legitimate version of the concern)
+
+λ trades absolute-scale fidelity against relative structure. We use λ=0.5
+(Eigen/DAv2); BTS/AdaBins/NeWCRFs use **0.85** (more structure-focused).
+Given ZED stereo GT is noisiest exactly where a systematic scale bias would be
+inferred (4–10 m), λ=0.85 is a plausible win. Kept as the top sweep item —
+`loss.silog_lambda` is already config-exposed, so it costs one override.
+
+### 5.3 The real gap: nothing penalized blurry edges → gradient matching added
+
+SigLog is a **pointwise** statistic: it is indifferent to *where* error sits,
+so a prediction that smears a depth discontinuity across many pixels can score
+as well as a sharp one. That is a direct contributor to the soft/blurry depth
+seen in the visualizations. **Added** `GradientMatchingLoss` — multi-scale
+gradient matching on the log residual (Eigen & Fergus 2015; MiDaS/DPT's
+`L_reg`), minimized only when predicted depth *edges* coincide with GT edges.
+Gradients count only where both neighbouring pixels have valid GT, so sensor
+holes cannot manufacture edges. `loss.gradient_matching_weight: 0.5` in
+`hdi_enhanced` / `hdi_dav2` / `hdi_temporal`; **0 in faithful `hdi.yaml`**.
+Phase 1's loss is unspecified by InstanceDepth, so this is a free, well-cited
+choice — and it is the improvement most likely to sharpen object separation
+without any architectural change.
+
+Phase 2's losses (Eq. 5–7: CE + point-sampled BCE/Dice + smooth-L1 depth) and
+Phase 3's (Eq. 10–12) are paper-specified and stay unchanged.
+
+## 6. Mask2Former's own metrics (COCO mask AP)
+
+Phase 2 eval now reports **AP, AP50, AP75, APs, APm, APl** — exactly what
+Mask2Former's tables report — alongside the existing project metrics.
+Implemented standalone (`utils/phase2_metrics.compute_mask_ap`) against the
+COCO protocol rather than depending on `pycocotools` (absent here, and it
+would need a COCO-format conversion step): 10 IoU thresholds .50:.05:.95,
+101-point interpolated PR, global score ranking across images, COCO's ignore
+semantics for the area bands. Detections are **not** score-filtered (AP is
+rank-based — a cut would silently truncate the PR curve) and are scored the
+way Mask2Former's own `instance_inference` does: **class confidence × mask
+quality**.
+
+Why keep both suites: AP is rank-based and externally comparable (it answers
+"how good is the instance branch in the field's standard currency"); the
+existing fixed-threshold P/R/F1/IoU + **depth-layer MAE** answer "how good is
+it at the operating point Phase 3 actually consumes" — and depth-layer MAE has
+no standard equivalent, since the depth layer is this paper's own addition.
+Both are reported for the whole test split and the occlusion slice.
+Correctness is pinned by 7 tests against analytically-known cases
+(`tests/test_coco_ap.py`).
+
+## 7. Orchestration
 
 `scripts/run_full_pipeline.sh` — one command for P1 → P1b(temporal) → P2 → P3,
 each with train / eval / viz / videos; training failures gate only their

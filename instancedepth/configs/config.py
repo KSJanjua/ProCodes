@@ -96,6 +96,12 @@ class LossConfig:
     deep_supervision_weights: Tuple[float, float] = (0.5, 0.25)   # weight on D_1, D_2 (not D_final)
     bin_bce_weight: float = 1.0               # ordinal per-bin BCE weight
     disparity_aux_weight: float = 0.0         # 0 = off (faithful); >0 only in hdi_enhanced.yaml
+    gradient_matching_weight: float = 0.0     # multi-scale gradient matching (Eigen & Fergus 2015 /
+                                              # MiDaS L_reg): sharpens depth edges, which SigLog --
+                                              # a pointwise statistic -- cannot penalize. 0 = off
+                                              # (faithful); >0 in hdi_enhanced.yaml. Phase 1's loss
+                                              # is unspecified by the paper, so this is a free choice.
+    gradient_matching_scales: int = 4         # strided subsample levels (MiDaS's scheme)
 
 
 @dataclass
