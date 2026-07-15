@@ -83,6 +83,28 @@ def test_frame_dump_writer():
         assert len(list((Path(td) / "seq_frames").glob("frame_*.png"))) == 2
 
 
+def test_frame_dump_writer_stitches_with_system_ffmpeg():
+    """With a stitch_target set, release() must produce a real video via the
+    system ffmpeg (and clean up the PNGs); without ffmpeg on PATH it must keep
+    the PNGs -- both behaviors asserted according to what this machine has."""
+    import shutil
+    import tempfile
+    from pathlib import Path
+    from instancedepth.utils.viz import FrameDumpWriter
+
+    with tempfile.TemporaryDirectory() as td:
+        target = Path(td) / "clip.mp4"
+        w = FrameDumpWriter(Path(td) / "clip_frames", fps=10.0, stitch_target=target)
+        for i in range(4):
+            w.write(np.full((32, 32, 3), i * 20, np.uint8))
+        w.release()
+        if shutil.which("ffmpeg"):
+            assert target.exists() and target.stat().st_size > 0
+            assert not (Path(td) / "clip_frames").exists()   # PNGs cleaned up
+        else:
+            assert len(list((Path(td) / "clip_frames").glob("frame_*.png"))) == 4
+
+
 def test_open_frame_source_directory_input():
     """infer_video's universal escape hatch: a directory of image frames must
     work on any OpenCV build, in filename order, with the fallback fps."""

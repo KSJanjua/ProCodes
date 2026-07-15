@@ -195,14 +195,18 @@ class FrameDumpWriter:
 
     Used when the installed OpenCV build has no usable video encoder (common
     on headless/conda server builds without FFmpeg, where every fourcc fails
-    to open). Guarantees the tool still produces output; ``release()`` logs
-    the exact ffmpeg command to stitch the frames into a video afterwards.
+    to open). ``release()`` then stitches the frames into ``stitch_target``
+    with the **system ffmpeg binary** (frequently present even when OpenCV's
+    bundled FFmpeg is not) and removes the PNGs on success, so callers still
+    end up with a real video file. Without a system ffmpeg the PNGs are kept
+    and the exact stitch command is logged instead.
     """
 
-    def __init__(self, dir_path: Path, fps: float) -> None:
+    def __init__(self, dir_path: Path, fps: float, stitch_target: Optional[Path] = None) -> None:
         self.dir = Path(dir_path)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.fps = fps
+        self.stitch_target = Path(stitch_target) if stitch_target else None
         self._count = 0
 
     def isOpened(self) -> bool:
@@ -213,20 +217,51 @@ class FrameDumpWriter:
         self._count += 1
 
     def release(self) -> None:
+        if self._count and self.stitch_target and self._stitch():
+            return
         log.info(
             "FrameDumpWriter: wrote %d PNG frames to %s -- stitch into a video with:\n"
             "  ffmpeg -framerate %g -i %s/frame_%%06d.png -c:v libx264 -pix_fmt yuv420p %s.mp4",
             self._count, self.dir, self.fps, self.dir, self.dir,
         )
 
+    def _stitch(self) -> bool:
+        """Encode the dumped frames with the system ffmpeg; True on success.
+        Tries libx264 first, then mpeg4 (minimal ffmpeg builds); pads to even
+        dimensions, which yuv420p encoders require."""
+        import shutil as _shutil
+        import subprocess as _subprocess
+
+        ffmpeg = _shutil.which("ffmpeg")
+        if ffmpeg is None:
+            return False
+        pattern = str(self.dir / "frame_%06d.png")
+        pad = "pad=ceil(iw/2)*2:ceil(ih/2)*2"
+        for codec in ("libx264", "mpeg4"):
+            cmd = [ffmpeg, "-y", "-loglevel", "error", "-framerate", f"{self.fps:g}",
+                   "-i", pattern, "-vf", pad, "-c:v", codec, "-pix_fmt", "yuv420p",
+                   str(self.stitch_target)]
+            try:
+                _subprocess.run(cmd, check=True)
+            except (_subprocess.CalledProcessError, OSError):
+                continue
+            log.info("FrameDumpWriter: stitched %d frames -> %s (system ffmpeg, %s); "
+                     "removing the intermediate PNG directory", self._count, self.stitch_target, codec)
+            _shutil.rmtree(self.dir, ignore_errors=True)
+            return True
+        log.warning("FrameDumpWriter: system ffmpeg found but stitching failed -- keeping PNGs in %s", self.dir)
+        return False
+
 
 def open_video_writer(path: Path, fps: float, frame_wh: Tuple[int, int]):
     """Open a video writer, trying mp4v/.mp4, then MJPG/.avi (present in
     virtually every FFmpeg build and free of MPEG-4 profile limits), then
     XVID/.avi. If every encoder fails -- an OpenCV build without video
-    encoding support -- falls back to a ``FrameDumpWriter`` (numbered PNGs +
-    a logged ffmpeg stitch command) instead of crashing. Returns
-    (writer, actual_output_path)."""
+    encoding support -- falls back to a ``FrameDumpWriter``, which stitches
+    its PNG frames into a real video via the system ffmpeg on release()
+    (or keeps them + logs the stitch command if no ffmpeg exists). Returns
+    (writer, actual_output_path); with the fallback the actual output is
+    ``<path>.mp4`` when stitching succeeds, else the PNG directory."""
     for fourcc, suffix in _VIDEO_CODECS:
         p = Path(path).with_suffix(suffix)
         w = cv2.VideoWriter(str(p), cv2.VideoWriter_fourcc(*fourcc), fps, frame_wh)
@@ -235,10 +270,10 @@ def open_video_writer(path: Path, fps: float, frame_wh: Tuple[int, int]):
             return w, p
         w.release()
     dump_dir = Path(str(path) + "_frames")
+    stitch_target = Path(str(path) + ".mp4")
     log.warning(
         "no cv2 video encoder could be opened (tried %s) at frame size %s -- "
-        "falling back to a PNG frame dump in %s. Check cv2.getBuildInformation() "
-        "for FFMPEG support on this machine.",
-        "/".join(c for c, _ in _VIDEO_CODECS), frame_wh, dump_dir,
+        "dumping PNG frames to %s and stitching to %s via the system ffmpeg on completion.",
+        "/".join(c for c, _ in _VIDEO_CODECS), frame_wh, dump_dir, stitch_target,
     )
-    return FrameDumpWriter(dump_dir, fps), dump_dir
+    return FrameDumpWriter(dump_dir, fps, stitch_target=stitch_target), stitch_target

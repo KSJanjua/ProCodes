@@ -1,7 +1,11 @@
 """Run the full inference pipeline on an ARBITRARY real-world video (e.g.
 downloaded from the internet) and produce a side-by-side comparison video:
 
-    [ original RGB | predicted depth ]
+    [ original RGB | predicted depth | instance overlay ]
+
+The instance panel (Phase 3 only; suppress with --no-instances) shows the
+instance branch's predicted masks over the original frame, each labelled with
+its predicted depth layer Dep_i in metres.
 
 Works with either the Phase-1 (holistic) or Phase-3 (occlusion-refined) model.
 This is the generalization check: the model was trained on a single indoor
@@ -42,8 +46,10 @@ from typing import Iterator, Optional, Tuple
 import cv2
 import numpy as np
 
-from instancedepth.predict import build_depth_predictor
-from instancedepth.utils.viz import colorize_depth, open_video_writer, put_label
+from instancedepth.predict import build_scene_predictor
+from instancedepth.utils.viz import (
+    colorize_depth, draw_instances_with_depth, open_video_writer, put_label,
+)
 
 log = logging.getLogger("scripts.infer_video")
 
@@ -154,12 +160,20 @@ def main() -> None:
     ap.add_argument("--max-frames", type=int, default=None)
     ap.add_argument("--fps", type=float, default=30.0,
                     help="fps fallback when the source doesn't carry one (frame directories)")
+    ap.add_argument("--no-instances", action="store_true",
+                    help="drop the instance-overlay panel (Phase 3; Phase 1 has no instance branch)")
+    ap.add_argument("--inst-score-thresh", type=float, default=0.5,
+                    help="category-confidence cut for the instance overlay")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-    predict, max_depth = build_depth_predictor(args.phase, args.config, args.checkpoint, args.override)
+    show_instances = args.phase == 3 and not args.no_instances
+    predict, max_depth = build_scene_predictor(
+        args.phase, args.config, args.checkpoint, args.override,
+        inst_score_thresh=args.inst_score_thresh,
+    )
 
     frames, src_fps, total = open_frame_source(args.video, fps_fallback=args.fps)
     out_fps = src_fps / max(args.stride, 1)
@@ -176,12 +190,17 @@ def main() -> None:
         idx += 1
 
         H, W = bgr.shape[:2]
-        depth = predict(bgr)
+        pred = predict(bgr)
+        depth = pred["depth"]
         if depth.shape != (H, W):
             depth = cv2.resize(depth, (W, H), interpolation=cv2.INTER_LINEAR)
         label = "Phase-3 refined" if args.phase == 3 else "Phase-1 depth"
-        canvas = np.hstack([put_label(bgr, "RGB"),
-                            put_label(colorize(depth, args.normalize, max_depth), label)])
+        panels = [put_label(bgr, "RGB"),
+                  put_label(colorize(depth, args.normalize, max_depth), label)]
+        if show_instances:
+            overlay = draw_instances_with_depth(bgr, pred["masks"], pred["mask_depths"])
+            panels.append(put_label(overlay, f"instances ({len(pred['masks'])}, Dep_i)"))
+        canvas = np.hstack(panels)
         if writer is None:
             writer, actual_path = open_video_writer(Path(args.out), out_fps,
                                                     (canvas.shape[1], canvas.shape[0]))
