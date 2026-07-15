@@ -105,6 +105,26 @@ def test_frame_dump_writer_stitches_with_system_ffmpeg():
             assert len(list((Path(td) / "clip_frames").glob("frame_*.png"))) == 4
 
 
+def test_ffmpeg_pipe_writer():
+    """Streams frames straight into a system ffmpeg; exercised only where
+    ffmpeg exists (e.g. the training server) -- silently passes elsewhere."""
+    import shutil
+    import tempfile
+    from pathlib import Path
+    from instancedepth.utils.viz import FfmpegPipeWriter, _system_ffmpeg_encoder
+
+    ffmpeg, encoder = _system_ffmpeg_encoder()
+    if ffmpeg is None:
+        return
+    with tempfile.TemporaryDirectory() as td:
+        target = Path(td) / "pipe.mp4"
+        w = FfmpegPipeWriter(target, fps=10.0, frame_wh=(64, 48), ffmpeg=ffmpeg, encoder=encoder)
+        for i in range(4):
+            w.write(np.full((48, 64, 3), i * 30, np.uint8))
+        w.release()
+        assert target.exists() and target.stat().st_size > 0
+
+
 def test_open_frame_source_directory_input():
     """infer_video's universal escape hatch: a directory of image frames must
     work on any OpenCV build, in filename order, with the fallback fps."""

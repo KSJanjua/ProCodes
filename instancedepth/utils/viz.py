@@ -253,15 +253,76 @@ class FrameDumpWriter:
         return False
 
 
+class FfmpegPipeWriter:
+    """cv2.VideoWriter-compatible writer that streams raw BGR frames straight
+    into a system ``ffmpeg`` process (no intermediate PNGs, no cv2 encoder
+    needed). Preferred fallback when the OpenCV build cannot encode video but
+    the machine has ffmpeg -- the common Backend.AI situation."""
+
+    def __init__(self, target: Path, fps: float, frame_wh: Tuple[int, int],
+                 ffmpeg: str, encoder: str) -> None:
+        import subprocess as _subprocess
+
+        w, h = frame_wh
+        self.target = Path(target)
+        cmd = [ffmpeg, "-y", "-loglevel", "error",
+               "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}",
+               "-r", f"{fps:g}", "-i", "-",
+               "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
+               "-c:v", encoder, "-pix_fmt", "yuv420p", str(self.target)]
+        self._proc = _subprocess.Popen(cmd, stdin=_subprocess.PIPE)
+        self._count = 0
+
+    def isOpened(self) -> bool:
+        return self._proc.poll() is None
+
+    def write(self, frame: np.ndarray) -> None:
+        try:
+            self._proc.stdin.write(np.ascontiguousarray(frame).tobytes())
+        except (BrokenPipeError, OSError) as e:
+            raise RuntimeError(
+                f"ffmpeg pipe died while writing frame {self._count} to {self.target} "
+                "(run with -v and check ffmpeg stderr above)") from e
+        self._count += 1
+
+    def release(self) -> None:
+        self._proc.stdin.close()
+        code = self._proc.wait()
+        if code == 0:
+            log.info("FfmpegPipeWriter: encoded %d frames -> %s", self._count, self.target)
+        else:
+            log.warning("FfmpegPipeWriter: ffmpeg exited with code %d for %s", code, self.target)
+
+
+def _system_ffmpeg_encoder():
+    """(ffmpeg_path, encoder_name) using the system binary, or (None, None).
+    Prefers libx264; falls back to mpeg4 for minimal ffmpeg builds."""
+    import shutil as _shutil
+    import subprocess as _subprocess
+
+    ffmpeg = _shutil.which("ffmpeg")
+    if ffmpeg is None:
+        return None, None
+    try:
+        listed = _subprocess.run([ffmpeg, "-hide_banner", "-encoders"],
+                                 capture_output=True, text=True).stdout
+    except OSError:
+        return None, None
+    for enc in ("libx264", "mpeg4"):
+        if enc in listed:
+            return ffmpeg, enc
+    return None, None
+
+
 def open_video_writer(path: Path, fps: float, frame_wh: Tuple[int, int]):
-    """Open a video writer, trying mp4v/.mp4, then MJPG/.avi (present in
-    virtually every FFmpeg build and free of MPEG-4 profile limits), then
-    XVID/.avi. If every encoder fails -- an OpenCV build without video
-    encoding support -- falls back to a ``FrameDumpWriter``, which stitches
-    its PNG frames into a real video via the system ffmpeg on release()
-    (or keeps them + logs the stitch command if no ffmpeg exists). Returns
-    (writer, actual_output_path); with the fallback the actual output is
-    ``<path>.mp4`` when stitching succeeds, else the PNG directory."""
+    """Open a video writer with a three-tier fallback:
+
+    1. cv2.VideoWriter: mp4v/.mp4, then MJPG/.avi, then XVID/.avi;
+    2. no cv2 encoder but a system ffmpeg exists -> ``FfmpegPipeWriter``
+       (frames streamed straight into ffmpeg, real video out, no temp files);
+    3. neither -> ``FrameDumpWriter`` (numbered PNGs + logged stitch command).
+
+    Returns (writer, actual_output_path)."""
     for fourcc, suffix in _VIDEO_CODECS:
         p = Path(path).with_suffix(suffix)
         w = cv2.VideoWriter(str(p), cv2.VideoWriter_fourcc(*fourcc), fps, frame_wh)
@@ -269,11 +330,18 @@ def open_video_writer(path: Path, fps: float, frame_wh: Tuple[int, int]):
             log.info("video writer: %s -> %s", fourcc, p)
             return w, p
         w.release()
+
+    ffmpeg, encoder = _system_ffmpeg_encoder()
+    if ffmpeg is not None:
+        target = Path(str(path) + ".mp4")
+        log.info("no cv2 video encoder in this OpenCV build -- streaming frames "
+                 "to the system ffmpeg (%s) -> %s", encoder, target)
+        return FfmpegPipeWriter(target, fps, frame_wh, ffmpeg, encoder), target
+
     dump_dir = Path(str(path) + "_frames")
-    stitch_target = Path(str(path) + ".mp4")
     log.warning(
-        "no cv2 video encoder could be opened (tried %s) at frame size %s -- "
-        "dumping PNG frames to %s and stitching to %s via the system ffmpeg on completion.",
-        "/".join(c for c, _ in _VIDEO_CODECS), frame_wh, dump_dir, stitch_target,
+        "no cv2 video encoder (tried %s) and no system ffmpeg -- dumping PNG "
+        "frames to %s; the stitch command is logged on completion.",
+        "/".join(c for c, _ in _VIDEO_CODECS), dump_dir,
     )
-    return FrameDumpWriter(dump_dir, fps, stitch_target=stitch_target), stitch_target
+    return FrameDumpWriter(dump_dir, fps), dump_dir
