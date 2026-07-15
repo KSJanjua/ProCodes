@@ -81,3 +81,30 @@ def test_frame_dump_writer():
             w.write(np.zeros((8, 8, 3), np.uint8))
         w.release()
         assert len(list((Path(td) / "seq_frames").glob("frame_*.png"))) == 2
+
+
+def test_open_frame_source_directory_input():
+    """infer_video's universal escape hatch: a directory of image frames must
+    work on any OpenCV build, in filename order, with the fallback fps."""
+    import cv2
+    import tempfile
+    from pathlib import Path
+    from scripts.infer_video import open_frame_source
+
+    with tempfile.TemporaryDirectory() as td:
+        for i in range(3):
+            frame = np.full((8, 8, 3), i * 10, np.uint8)
+            cv2.imwrite(str(Path(td) / f"frame_{i:03d}.png"), frame)
+        frames, fps, total = open_frame_source(td, fps_fallback=12.0)
+        got = list(frames)
+        assert (fps, total, len(got)) == (12.0, 3, 3)
+        assert [int(f[0, 0, 0]) for f in got] == [0, 10, 20]   # filename order
+
+
+def test_open_frame_source_missing_path():
+    from scripts.infer_video import open_frame_source
+    try:
+        open_frame_source("definitely/not/a/real/path.mp4", fps_fallback=30.0)
+        assert False, "expected FileNotFoundError"
+    except FileNotFoundError as e:
+        assert "does not exist" in str(e)
