@@ -1,0 +1,50 @@
+# Full-DAv2 Phase-1: pretrained encoder + pretrained DPT head, fine-tuned.
+# The AbsRel lever — see videodepth/models/dav2_dpt.py's evidence table.
+#
+# Point BOTH checkpoint paths at the same official DAv2 file (recommended:
+# depth_anything_v2_metric_hypersim_vitl.pth — indoor metric, sigmoid head).
+
+run_name: "dav2_full"
+run_root: "runs"
+seed: 2026
+
+dav2_checkpoint: null      # REQUIRED: /path/to/depth_anything_v2_metric_hypersim_vitl.pth
+
+backbone:
+  name: "facebook/dinov2-large"
+  checkpoint_path: null    # REQUIRED: same file as dav2_checkpoint
+  hook_layers: [4, 11, 17, 23]   # DAv2's vitl taps (NOT the 5/14/23 of the bespoke decoder)
+  freeze: false
+  allow_hub_download: false
+
+out_channels: [256, 512, 1024, 1024]
+features: 256
+max_depth: 10.0
+
+silog_lambda: 0.5
+gradient_matching_weight: 0.5   # edge sharpness; set 0 for the pure-SigLog ablation
+
+data:
+  annotations_root: "gid_custom"
+  image_size: [728, 1288]        # /14
+  max_depth: 10.0
+  min_instance_px: 64
+  hflip_prob: 0.5
+  color_jitter: 0.0
+
+optim:
+  lr: 5.0e-5                # DPT head
+  encoder_lr_mult: 0.1      # encoder at 5e-6 — protect the pretrained features
+  weight_decay: 0.01
+  total_iters: 20000
+  warmup_iters: 500
+  poly_power: 0.9
+  grad_clip_norm: 1.0
+  precision: "bf16"
+  batch_size: 4
+  num_workers: 4
+  log_every: 50
+  ckpt_every: 1000
+  eval_every: 1000
+
+eval_max_frames: 800

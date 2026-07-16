@@ -48,10 +48,13 @@ def frame_motion_scores(depths: List[np.ndarray]) -> List[float]:
     prev = depths[0]
     for d in depths[1:]:
         a, b = prev[::_GRID_STRIDE, ::_GRID_STRIDE], d[::_GRID_STRIDE, ::_GRID_STRIDE]
-        valid = (a > 0) & (b > 0)
+        # raw depth files may carry NaN/inf (the dataset sanitizes only in
+        # __getitem__, and this scorer reads the raw arrays)
+        valid = (a > 0) & (b > 0) & np.isfinite(a) & np.isfinite(b)
         if valid.any():
-            diff = np.abs(np.log(np.maximum(a, _EPS)) - np.log(np.maximum(b, _EPS)))
-            scores.append(float(diff[valid].mean()))
+            la = np.log(np.maximum(a[valid], _EPS))
+            lb = np.log(np.maximum(b[valid], _EPS))
+            scores.append(float(np.abs(la - lb).mean()))
         else:
             scores.append(0.0)
         prev = d

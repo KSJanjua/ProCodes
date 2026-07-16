@@ -285,3 +285,30 @@ def test_streaming_stabilizer_smooths_layers_and_keeps_ids():
     assert len(set(out_ids)) == 1                         # one persistent identity
     # stabilized trace varies less than the raw flicker
     assert np.std(out_layers[1:]) < np.std(layers[1:])
+
+
+# --------------------------------------------------------------------------- #
+# Regression: Trainer.fit builds a RunManifest that reads cfg.data.* — the
+# first server run crashed with AttributeError because VideoConfig had no
+# .data. It now resolves from hdi_config at load time.
+# --------------------------------------------------------------------------- #
+def test_video_config_exposes_data_for_run_manifest():
+    from pathlib import Path
+    from instancedepth.utils.manifest import RunManifest
+    from videodepth.configs.config import VideoConfig
+    cfg = VideoConfig.from_yaml("videodepth/configs/video_temporal.yaml")
+    assert cfg.data is not None and cfg.data.annotations_root
+    m = RunManifest.build(cfg, repo_root=Path("."))       # must not raise
+    assert m.seed == cfg.seed
+
+
+def test_frame_motion_scores_ignore_nan_and_inf():
+    base = np.full((32, 32), 4.0, np.float32)
+    corrupt = base.copy()
+    corrupt[0, 0] = np.nan
+    corrupt[1, 1] = np.inf
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")                    # any RuntimeWarning fails
+        s = frame_motion_scores([base, corrupt])
+    assert s[1] == pytest.approx(0.0, abs=1e-6)           # finite pixels are static

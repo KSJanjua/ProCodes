@@ -98,6 +98,42 @@ Zero training, deployable on **any existing checkpoint** today — this is the
 component that makes results *visible* immediately (stable colours, stable
 per-person depth through occlusions).
 
+## 4½. The AbsRel lever: full-DAv2 Phase 1 (`models/dav2_dpt.py`)
+
+The audit's remaining headline gap is REL: paper 0.045 on GID vs 0.078 here
+(note: different datasets, soft comparison — and RMS 0.38 here already *beats*
+the paper's 0.397, so the error is concentrated at near-range pixels, which
+REL weights most). The evidence chain for the fix:
+
+| Model | REL |
+|---|---|
+| this repo's from-scratch Depth-Range decoder | 0.078 |
+| swap ONLY the encoder to DAv2's | 0.0778 (−0.5 %) |
+| plain DAv2 — pretrained encoder **+ DPT head** (paper Table 2, GID) | **0.053** |
+| paper's full method (GID) | 0.045 |
+
+The pretrained **decoder** carries the metric-depth prior; the encoder swap
+alone proves the encoder was never the bottleneck. `DAV2MetricModel`
+reproduces DAv2's DPT head **key-for-key compatible** with the official
+checkpoints (unit-tested against the vitl key/shape schema), loads the full
+pretrained model (`pretrained.*` → existing DINOv2 wrapper, `depth_head.*` →
+fail-loud head loader), adds the metric `sigmoid·max_depth` output, and
+fine-tunes with SigLog + gradient matching (encoder at 0.1× LR).
+
+It exposes the same `backbone/decoder/refinement` contract, so the temporal
+stage wraps it unchanged — **DAv2 spatial + TGM stabilizer compose for
+free** (unit-tested). Recommended init: the *metric hypersim* checkpoint
+(indoor range, sigmoid head matches 1:1).
+
+```bash
+python -m videodepth.engine.train_dav2 \
+    --config videodepth/configs/dav2_full.yaml \
+    --override dav2_checkpoint=/path/to/depth_anything_v2_metric_hypersim_vitl.pth \
+               backbone.checkpoint_path=/path/to/depth_anything_v2_metric_hypersim_vitl.pth
+python -m videodepth.engine.train_dav2 --evaluate \
+    --config videodepth/configs/dav2_full.yaml --checkpoint runs/dav2_full/best.pth
+```
+
 ## 5. Run book (training server)
 
 ```bash
