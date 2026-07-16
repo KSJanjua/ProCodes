@@ -312,3 +312,27 @@ def test_frame_motion_scores_ignore_nan_and_inf():
         warnings.simplefilter("error")                    # any RuntimeWarning fails
         s = frame_motion_scores([base, corrupt])
     assert s[1] == pytest.approx(0.0, abs=1e-6)           # finite pixels are static
+
+
+# --------------------------------------------------------------------------- #
+# The video Phase-3 head is architecturally distinct from the paper's MLP head,
+# so a video-trained checkpoint MUST be evaluated with evaluate_phase3_video
+# (not the stock evaluate_phase3). This test documents/enforces that.
+# --------------------------------------------------------------------------- #
+def test_bounded_head_incompatible_with_vanilla_head_statedict():
+    from instancedepth.models.phase3.relation_head import OcclusionRelationHead
+    vanilla = OcclusionRelationHead(per_member_channels=10, hidden_dim=16)
+    bounded = BoundedPairAttentionHead(per_member_channels=10, hidden_dim=16)
+    assert set(vanilla.state_dict()) != set(bounded.state_dict())
+    # bounded emits 1 correction channel per member; vanilla emits 2
+    assert vanilla.state_dict()["out.weight"].shape[0] == 2
+    assert bounded.state_dict()["out.weight"].shape[0] == 1
+    # loading one into the other must fail loudly (strict), never silently
+    import pytest as _pt
+    with _pt.raises(RuntimeError):
+        vanilla.load_state_dict(bounded.state_dict())
+
+
+def test_evaluate_phase3_video_module_imports():
+    import importlib
+    importlib.import_module("videodepth.engine.evaluate_phase3_video")

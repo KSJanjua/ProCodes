@@ -148,7 +148,7 @@ if [[ ! -f "$PHASE3_RUN/best.pth" ]]; then
 elif ! fresh "$PHASE3_RUN/eval_phase3_test.json"; then
     skip "eval exists: $PHASE3_RUN/eval_phase3_test.json"
 else
-    run phase3_eval python -m instancedepth.engine.evaluate_phase3 \
+    run phase3_eval python -m videodepth.engine.evaluate_phase3_video \
         --config "$PHASE3_CFG" --checkpoint "$PHASE3_RUN/best.pth" \
         "${EVAL_BATCHES[@]}" \
         --override "run_name=$(basename "$PHASE3_RUN")"
