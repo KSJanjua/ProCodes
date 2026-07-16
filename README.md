@@ -15,9 +15,21 @@ where bodies overlap. It follows the paper's three-stage pipeline:
 | **Phase 3** — Occlusion-Aware Depth Refinement | `models/phase3` | Occlusion-corrected per-instance + dense depth (Eq. 8–12) |
 
 Every non-trivial design decision is tagged in-code as `[Paper Specified]`,
-`[Strongly Inferred]`, or `[Reasonable Assumption]`. The full Phase 3 design
-rationale and a diagnosis of a resolved qualitative-quality issue live in
-[`docs/`](docs/).
+`[Strongly Inferred]`, or `[Reasonable Assumption]`.
+
+📐 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — start here.** Ten diagrams
+covering the full data flow: system overview, data engine, each phase's
+internals, the temporal module, training stages, losses, tooling, and a
+repository map.
+
+| Doc | What it covers |
+|---|---|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | How everything flows (diagrams) |
+| [PHASE3_DESIGN.md](docs/PHASE3_DESIGN.md) | Phase 3 blueprint, Eq. 8–12 |
+| [PHASE3_DIAGNOSIS.md](docs/PHASE3_DIAGNOSIS.md) | Defects D1–D5 found and fixed |
+| [TEMPORAL_DESIGN.md](docs/TEMPORAL_DESIGN.md) | FlashDepth temporal integration |
+| [FLASHDEPTH_ANALYSIS.md](docs/FLASHDEPTH_ANALYSIS.md) | What was adopted vs rejected |
+| [IMPROVEMENTS.md](docs/IMPROVEMENTS.md) | Results analysis + loss audit |
 
 ## Repository layout
 
