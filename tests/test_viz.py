@@ -249,3 +249,49 @@ def test_mask_tracker_reset():
     tr.reset()
     ids2 = tr.update([m], [2.0])[2]
     assert ids1 == [0] and ids2 == [0]                # id counter reset per sequence
+
+
+# --------------------------------------------------------------------------- #
+# MaskTracker: global (Hungarian) association + graceful greedy fallback.
+# --------------------------------------------------------------------------- #
+def _rect(H, W, r0, r1, c0, c1):
+    m = np.zeros((H, W), bool)
+    m[r0:r1, c0:c1] = True
+    return m
+
+
+def test_mask_tracker_preserves_identity_through_crossing():
+    """Two people who cross (masks swap sides) must keep their ids/colours,
+    not spawn fresh tracks."""
+    from instancedepth.utils.viz import MaskTracker
+    H = W = 40
+    A = _rect(H, W, 0, W, 0, 24)
+    B = _rect(H, W, 0, W, 16, W)          # overlaps A
+    tr = MaskTracker(iou_thresh=0.3, min_hits=1, max_age=5)
+    tr.update([A, B], [2.0, 3.0])          # seed ids 0,1
+    # next frame: they crossed -- A now on the right, B on the left
+    dA = _rect(H, W, 0, W, 14, W)
+    dB = _rect(H, W, 0, W, 0, 26)
+    _, _, ids = tr.update([dA, dB], [2.0, 3.0])
+    assert sorted(ids) == [0, 1]           # both identities preserved
+    assert tr._next_id == 2                # no spurious new track
+
+
+def test_mask_tracker_falls_back_without_scipy(monkeypatch):
+    """If scipy is unavailable the greedy path must still associate."""
+    import builtins
+    from instancedepth.utils.viz import MaskTracker
+    real_import = builtins.__import__
+
+    def no_scipy(name, *a, **k):
+        if name.startswith("scipy"):
+            raise ImportError("scipy disabled for test")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", no_scipy)
+    H = W = 20
+    A = _rect(H, W, 0, W, 0, 12)
+    tr = MaskTracker(iou_thresh=0.3, min_hits=1, max_age=5)
+    tr.update([A], [2.0])
+    _, _, ids = tr.update([_rect(H, W, 0, W, 0, 11)], [2.0])   # same person, moved
+    assert ids == [0]                      # re-associated via greedy fallback

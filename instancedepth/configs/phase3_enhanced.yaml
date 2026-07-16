@@ -11,6 +11,7 @@ run_name: "phase3_refine_enhanced"
 run_root: "runs"
 seed: 2026
 
+freeze_phase1: false   # faithful base (paper joint fine-tune); the enhanced deviations are the loss/feature ones below
 phase1_config: "instancedepth/configs/hdi.yaml"
 phase2_config: "instancedepth/configs/phase2_mask2former.yaml"
 phase1_checkpoint: null

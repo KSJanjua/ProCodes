@@ -120,20 +120,44 @@ class MaskTracker:
             return 0.0
         return float(inter) / float(np.logical_or(a, b).sum())
 
+    def _associate(self, masks: Sequence[np.ndarray]):
+        """Return a list of (track_idx, det_idx) matches with IoU >= threshold.
+
+        Global optimal assignment (Hungarian) over the IoU cost, so two people
+        crossing/overlapping can't be greedily mis-paired -- the failure that
+        greedy matching produces as an identity (colour) SWAP, which is the
+        "same person keeps changing colour" symptom. Falls back to the greedy
+        sort if scipy is unavailable, so viz never hard-depends on it."""
+        n_t, n_d = len(self._tracks), len(masks)
+        if n_t == 0 or n_d == 0:
+            return []
+        iou = np.zeros((n_t, n_d), np.float32)
+        for ti, t in enumerate(self._tracks):
+            for di, m in enumerate(masks):
+                iou[ti, di] = self._iou(t["mask"], m)
+        try:
+            from scipy.optimize import linear_sum_assignment
+            rows, cols = linear_sum_assignment(-iou)         # maximize total IoU
+            return [(int(ti), int(di)) for ti, di in zip(rows, cols)
+                    if iou[ti, di] >= self.iou_thresh]
+        except Exception:
+            matched_t, matched_d, out = set(), set(), []
+            for _, ti, di in sorted(
+                ((iou[ti, di], ti, di) for ti in range(n_t) for di in range(n_d)),
+                reverse=True,
+            ):
+                if iou[ti, di] < self.iou_thresh or ti in matched_t or di in matched_d:
+                    continue
+                matched_t.add(ti); matched_d.add(di); out.append((ti, di))
+            return out
+
     def update(self, masks: Sequence[np.ndarray], depths: Sequence[float]):
         """Associate this frame's (masks, depths) to existing tracks.
         Returns (masks, depths, ids) for the tracks that are currently
         confirmed and visible -- ready to hand to ``draw_instances_with_depth``."""
         masks = [np.asarray(m, bool) for m in masks]
-        pairs = sorted(
-            ((self._iou(t["mask"], m), ti, di)
-             for ti, t in enumerate(self._tracks) for di, m in enumerate(masks)),
-            reverse=True,
-        )
         matched_t, matched_d = set(), set()
-        for iou, ti, di in pairs:
-            if iou < self.iou_thresh or ti in matched_t or di in matched_d:
-                continue
+        for ti, di in self._associate(masks):
             t = self._tracks[ti]
             t.update(mask=masks[di], depth=float(depths[di]), hits=t["hits"] + 1, age=0)
             matched_t.add(ti); matched_d.add(di)

@@ -398,3 +398,40 @@ def test_occlusion_frame_indices():
     ds.index = [(man, "f_overlap"), (man, "f_disjoint"), (man, "f_single"), (man, "f_invalid_depth")]
     sel = occlusion_frame_indices(ds, max_depth=10.0)
     assert sel == [0]   # only f_overlap qualifies
+
+
+# --------------------------------------------------------------------------- #
+# freeze_phase1 (docs/AUDIT_2026.md): pin the Phase-1 depth branch so ROI-only
+# Phase-3 supervision can't drift the dense base (0.078 -> 0.139 abs_rel).
+# --------------------------------------------------------------------------- #
+def test_freeze_phase1_default_is_true():
+    from instancedepth.configs.phase3_config import Phase3Config
+    assert Phase3Config().freeze_phase1 is True
+
+
+def test_phase3_optimizer_handles_frozen_phase1():
+    """With Phase 1 frozen its params carry requires_grad=False, so the
+    optimizer must build a SINGLE (head-only) group and never see the frozen
+    depth params."""
+    import torch.nn as nn
+    from instancedepth.engine.train_phase3 import build_phase3_optimizer
+
+    class Fake(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.phase1 = nn.Linear(4, 4)            # "depth branch"
+            self.relation_head = nn.Linear(4, 2)     # Phi_o
+    m = Fake()
+    for p in m.phase1.parameters():
+        p.requires_grad_(False)
+
+    class OptimCfg:
+        lr = 1e-6
+        head_lr_mult = 10.0
+        weight_decay = 0.01
+    opt = build_phase3_optimizer(m, OptimCfg())
+    assert len(opt.param_groups) == 1                      # depth group dropped
+    trainable = {id(p) for g in opt.param_groups for p in g["params"]}
+    assert all(id(p) not in trainable for p in m.phase1.parameters())
+    assert all(id(p) in trainable for p in m.relation_head.parameters())
+    assert opt.param_groups[0]["lr"] == 1e-6 * 10.0

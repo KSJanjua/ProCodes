@@ -65,10 +65,14 @@ def build_phase3_optimizer(model: torch.nn.Module, cfg) -> torch.optim.Optimizer
     log.info("Phase 3 param groups: depth-branch=%.1fM (lr=%.1e), Phi_o=%.1fM (lr=%.1e)",
              n_depth / 1e6, cfg.lr, n_head / 1e6, cfg.lr * cfg.head_lr_mult)
 
-    groups = [
-        {"params": depth_params, "lr": cfg.lr},                        # group 0 -> logged as lr_backbone
-        {"params": head_params, "lr": cfg.lr * cfg.head_lr_mult},      # group 1 -> logged as lr_head
-    ]
+    # When Phase 1 is frozen (freeze_phase1: true) the depth group is empty;
+    # dropping it keeps a single, cleanly-logged group instead of a dead one.
+    groups = []
+    if depth_params:
+        groups.append({"params": depth_params, "lr": cfg.lr})          # group 0 -> logged as lr_backbone
+    else:
+        log.info("Phase 1 frozen -> optimizing only the Phi_o relation head")
+    groups.append({"params": head_params, "lr": cfg.lr * cfg.head_lr_mult})   # -> logged as lr_head
     return torch.optim.AdamW(groups, lr=cfg.lr, weight_decay=cfg.weight_decay)
 
 

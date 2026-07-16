@@ -14,6 +14,7 @@ run_name: "phase3_current"
 run_root: "runs"
 seed: 2026
 
+freeze_phase1: true   # freeze Phase 1: pins dense base at 0.078 abs_rel instead of drifting to 0.139 (docs/AUDIT_2026.md)
 phase1_config: "instancedepth/configs/hdi_enhanced.yaml"
 phase2_config: "instancedepth/configs/phase2_mask2former.yaml"
 phase1_checkpoint: "runs/hdi_enhanced/best.pth"

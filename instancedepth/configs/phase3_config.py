@@ -186,6 +186,18 @@ class Phase3Config:
     phase1_checkpoint: Optional[str] = None   # trained Phase 1 weights (required at runtime)
     phase2_checkpoint: Optional[str] = None   # trained Phase 2 weights (required at runtime)
 
+    # Whether to fine-tune the Phase-1 depth branch during Phase-3 refinement.
+    #
+    # The paper (Sec. 4.3) fine-tunes it at LR 1e-6. On this single-sensor
+    # dataset that is a NET LOSS: Phase 3 only supervises ROI (instance)
+    # pixels, so the whole-frame Phase-1 depth drifts catastrophically
+    # (measured: abs_rel 0.078 -> 0.139; results/phase3_current_eval.json,
+    # docs/AUDIT_2026.md). Freezing Phase 1 pins the dense base at Phase-1
+    # quality, so the refinement head can only ever help -- Phase 3 becomes
+    # non-degrading by construction. Default True (the robust choice for this
+    # data); set False to reproduce the paper's joint fine-tune verbatim.
+    freeze_phase1: bool = True
+
     candidate: Phase3CandidateConfig = field(default_factory=Phase3CandidateConfig)
     head: Phase3HeadConfig = field(default_factory=Phase3HeadConfig)
     loss: Phase3LossConfig = field(default_factory=Phase3LossConfig)

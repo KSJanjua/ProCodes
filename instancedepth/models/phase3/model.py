@@ -80,8 +80,20 @@ class Phase3Model(nn.Module):
             log.warning("no phase2_checkpoint -- Phase 2 uses COCO weights only (smoke test only)")
 
         self._freeze_phase2()
+        if getattr(cfg, "freeze_phase1", False):
+            self._freeze_phase1()
 
     # ------------------------------------------------------------------ #
+    def _freeze_phase1(self) -> None:
+        """Pin the Phase-1 depth branch (paper fine-tunes it at 1e-6; on this
+        single-sensor, ROI-only-supervised data that fine-tune drifts the
+        dense depth 0.078 -> 0.139 abs_rel -- docs/AUDIT_2026.md). Frozen, the
+        dense base stays at Phase-1 quality and refinement is non-degrading by
+        construction."""
+        for p in self.phase1.parameters():
+            p.requires_grad_(False)
+        self.phase1.eval()
+
     def reset_temporal_state(self) -> None:
         """Passthrough to Phase 1's temporal memory (no-op for per-frame
         Phase-1 checkpoints). Call at sequence boundaries when streaming."""
@@ -98,6 +110,8 @@ class Phase3Model(nn.Module):
         module's train/eval state (paper Sec. 4.3: instance decoder fixed)."""
         super().train(mode)
         self.phase2.eval()
+        if getattr(self.config, "freeze_phase1", False):
+            self.phase1.eval()   # keep the pinned depth branch deterministic
         return self
 
     # ------------------------------------------------------------------ #

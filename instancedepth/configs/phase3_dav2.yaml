@@ -8,6 +8,7 @@ run_name: "phase3_dav2"
 run_root: "runs"
 seed: 2026
 
+freeze_phase1: true   # freeze Phase 1: refinement is non-degrading by construction (docs/AUDIT_2026.md)
 phase1_config: "instancedepth/configs/hdi_dav2.yaml"
 phase2_config: "instancedepth/configs/phase2_dav2.yaml"
 phase1_checkpoint: "runs/hdi_dav2/best.pth"

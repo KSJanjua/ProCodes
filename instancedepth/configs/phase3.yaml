@@ -10,6 +10,11 @@ seed: 2026
 # are reproduced). Point these at the trained checkpoints before running.
 phase1_config: "instancedepth/configs/hdi.yaml"
 phase2_config: "instancedepth/configs/phase2_mask2former.yaml"
+
+# Paper Sec. 4.3 joint fine-tune: Phase 1 trainable at 1e-6. NOTE: on this
+# single-sensor dataset this drifts the dense base 0.078 -> 0.139 abs_rel
+# (docs/AUDIT_2026.md); phase3_current.yaml / phase3_dav2.yaml set this True.
+freeze_phase1: false
 phase1_checkpoint: null   # e.g. runs/hdi_faithful/best.pth   (REQUIRED at runtime)
 phase2_checkpoint: null   # e.g. runs/phase2_mask2former/best.pth (REQUIRED at runtime)
 
