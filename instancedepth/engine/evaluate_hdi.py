@@ -111,6 +111,7 @@ def evaluate_streaming(model: HolisticDepthModel, cfg: HDIConfig, device: torch.
     totals: Dict[str, float] = {}
     n = 0
     tae_sum, tae_n = 0.0, 0
+    gt_d_sum = pred_d_sum = 0.0
     prev_seq = None
     prev_pred = prev_gt = None
 
@@ -139,10 +140,26 @@ def evaluate_streaming(model: HolisticDepthModel, cfg: HDIConfig, device: torch.
             if tae == tae:   # not NaN
                 tae_sum += tae
                 tae_n += 1
+                # Context for TAE, without which it is uninterpretable:
+                #   gt_temporal_delta   = mean|Δgt|   -- how much GT itself moves
+                #     frame to frame (real motion + sensor noise). It is also the
+                #     TAE a *constant* predictor would score, i.e. the trivial
+                #     upper reference.
+                #   pred_temporal_delta = mean|Δpred| -- how much the prediction
+                #     moves. Compare the two: a prediction that tracks GT has
+                #     pred≈gt delta AND low TAE; one that flickers has
+                #     pred delta > gt delta.
+                # If TAE ≈ gt_temporal_delta, the prediction's frame-to-frame
+                # changes carry no information about GT's -- the metric is then
+                # dominated by GT noise and cannot resolve real improvements.
+                gt_d_sum += float((gt - prev_gt).abs()[both_valid].mean())
+                pred_d_sum += float((pred - prev_pred).abs()[both_valid].mean())
         prev_pred, prev_gt = pred, gt
 
     result = {k: v / max(n, 1) for k, v in totals.items()}
     result["temporal_alignment_error"] = tae_sum / max(tae_n, 1)
+    result["gt_temporal_delta"] = gt_d_sum / max(tae_n, 1)
+    result["pred_temporal_delta"] = pred_d_sum / max(tae_n, 1)
     result["num_frames"] = n
     return result
 
