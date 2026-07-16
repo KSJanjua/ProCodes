@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 # Full videodepth pipeline, one command:
 #
-#   bash videodepth/run_pipeline.sh
+#   bash videodepth/run_pipeline.sh            # the real runs
+#   SMOKE=1 bash videodepth/run_pipeline.sh    # 5-10 min end-to-end error check
+#
+# SMOKE=1 exercises every step's REAL code path — checkpoint loading, data
+# loading, forward, backward, checkpoint writing, eval JSON writing — with
+# ~3 training iterations and a few eval frames, in separate runs/smoke_*
+# directories (never touches, skips, or pollutes the real run dirs). If the
+# smoke pass completes, the real pipeline differs only in iteration counts.
 #
 # Steps (each skipped with a clear message if its prerequisite is missing,
 # and skipped if its output already exists so an interrupted run resumes
-# where it left off — use FORCE=1 to redo everything):
+# where it left off — use FORCE=1 to redo everything; SMOKE implies FORCE):
 #
 #   1. Baseline streaming eval of the per-frame Phase-1 checkpoint
 #      (the comparison row: abs_rel + TAE before the temporal stage).
@@ -24,6 +31,7 @@
 #   PHASE3_CFG=videodepth/configs/phase3_dav2_p2run.yaml
 #   DAV2_WEIGHTS=                            (unset = skip step 6)
 #   FORCE=                                   (1 = rerun steps whose outputs exist)
+#   SMOKE=                                   (1 = tiny error-check run, see above)
 
 set -euo pipefail
 cd "$(dirname "$0")/.."     # repo root, wherever the script is called from
@@ -34,11 +42,32 @@ TEMPORAL_CFG="${TEMPORAL_CFG:-videodepth/configs/video_temporal_dav2.yaml}"
 PHASE3_CFG="${PHASE3_CFG:-videodepth/configs/phase3_dav2_p2run.yaml}"
 DAV2_WEIGHTS="${DAV2_WEIGHTS:-}"
 FORCE="${FORCE:-}"
+SMOKE="${SMOKE:-}"
 
-TEMPORAL_RUN="runs/video_temporal_dav2"
-PHASE3_RUN="runs/phase3_video_dav2"
-DAV2_RUN="runs/dav2_full"
-LOGDIR="runs/pipeline_logs"
+if [[ -n "$SMOKE" ]]; then
+    FORCE=1
+    PREFIX="smoke_"
+    LABEL="SMOKE TEST"
+    # tiny but complete: 3 iters, eval at iter 2 (so best.pth is written and
+    # the next step has a checkpoint to load), 1-sample batches, no workers
+    TINY=(optim.total_iters=3 optim.warmup_iters=0 optim.log_every=1
+          optim.ckpt_every=2 optim.eval_every=2 optim.batch_size=1
+          optim.num_workers=0)
+    EVAL_BATCHES=(--max-batches 5)
+    EVAL_FRAMES=(--max-frames 20)
+else
+    PREFIX=""
+    LABEL="REAL RUN"
+    TINY=()
+    EVAL_BATCHES=()
+    EVAL_FRAMES=()
+fi
+
+BASE_RUN="runs/${PREFIX}hdi_dav2_baseline"
+TEMPORAL_RUN="runs/${PREFIX}video_temporal_dav2"
+PHASE3_RUN="runs/${PREFIX}phase3_video_dav2"
+DAV2_RUN="runs/${PREFIX}dav2_full"
+LOGDIR="runs/${PREFIX}pipeline_logs"
 mkdir -p "$LOGDIR"
 
 banner() { printf '\n============================================================\n %s\n============================================================\n' "$*"; }
@@ -48,9 +77,11 @@ run()    { local name="$1"; shift
            "$@" 2>&1 | tee "$LOGDIR/$name.log"; }
 fresh()  { [[ -n "$FORCE" || ! -e "$1" ]]; }   # true if we should (re)produce $1
 
+banner "$LABEL — P1=$P1_CKPT  P2=$P2_CKPT"
+
 # ---------------------------------------------------------------- step 1
 banner "[1/6] Baseline streaming eval (per-frame $P1_CKPT)"
-BASE_EVAL="$(dirname "$P1_CKPT")/eval_test_streaming.json"
+BASE_EVAL="$BASE_RUN/eval_test_streaming.json"
 if [[ ! -f "$P1_CKPT" ]]; then
     skip "no Phase-1 checkpoint at $P1_CKPT (set P1_CKPT=...)"
 elif ! fresh "$BASE_EVAL"; then
@@ -58,7 +89,8 @@ elif ! fresh "$BASE_EVAL"; then
 else
     run baseline_eval python -m instancedepth.engine.evaluate_hdi \
         --config instancedepth/configs/hdi_dav2.yaml \
-        --checkpoint "$P1_CKPT" --streaming
+        --checkpoint "$P1_CKPT" --streaming "${EVAL_BATCHES[@]}" \
+        --override "run_name=$(basename "$BASE_RUN")"
 fi
 
 # ---------------------------------------------------------------- step 2
@@ -78,7 +110,9 @@ else
         fi
     fi
     run temporal_train python -m videodepth.engine.train_video \
-        --config "$TEMPORAL_CFG" --override "init_checkpoint=$P1_CKPT"
+        --config "$TEMPORAL_CFG" --run-name "$(basename "$TEMPORAL_RUN")" \
+        --override "init_checkpoint=$P1_CKPT" "${TINY[@]}" \
+        ${SMOKE:+eval.max_frames=20}
 fi
 
 # ---------------------------------------------------------------- step 3
@@ -89,7 +123,9 @@ elif ! fresh "$TEMPORAL_RUN/eval_streaming_test.json"; then
     skip "eval exists: $TEMPORAL_RUN/eval_streaming_test.json"
 else
     run temporal_eval python -m videodepth.engine.evaluate_video \
-        --config "$TEMPORAL_CFG" --checkpoint "$TEMPORAL_RUN/best.pth"
+        --config "$TEMPORAL_CFG" --checkpoint "$TEMPORAL_RUN/best.pth" \
+        "${EVAL_FRAMES[@]}" \
+        --override "run_name=$(basename "$TEMPORAL_RUN")"
 fi
 
 # ---------------------------------------------------------------- step 4
@@ -101,7 +137,7 @@ elif ! fresh "$PHASE3_RUN/best.pth"; then
 else
     run phase3_train python -m videodepth.engine.train_phase3_video \
         --config "$PHASE3_CFG" \
-        --override "phase1_checkpoint=$P1_CKPT" "phase2_checkpoint=$P2_CKPT" \
+        --override "phase1_checkpoint=$P1_CKPT" "phase2_checkpoint=$P2_CKPT" "${TINY[@]}" \
         --run-name "$(basename "$PHASE3_RUN")"
 fi
 
@@ -114,6 +150,7 @@ elif ! fresh "$PHASE3_RUN/eval_phase3_test.json"; then
 else
     run phase3_eval python -m instancedepth.engine.evaluate_phase3 \
         --config "$PHASE3_CFG" --checkpoint "$PHASE3_RUN/best.pth" \
+        "${EVAL_BATCHES[@]}" \
         --override "run_name=$(basename "$PHASE3_RUN")"
 fi
 
@@ -128,19 +165,29 @@ elif ! fresh "$DAV2_RUN/best.pth"; then
 else
     run dav2_train python -m videodepth.engine.train_dav2 \
         --config videodepth/configs/dav2_full.yaml \
+        --run-name "$(basename "$DAV2_RUN")" \
         --override "dav2_checkpoint=$DAV2_WEIGHTS" \
-                   "backbone.checkpoint_path=$DAV2_WEIGHTS"
+                   "backbone.checkpoint_path=$DAV2_WEIGHTS" "${TINY[@]}" \
+        ${SMOKE:+eval_max_frames=20}
     run dav2_eval python -m videodepth.engine.train_dav2 --evaluate \
         --config videodepth/configs/dav2_full.yaml \
-        --checkpoint "$DAV2_RUN/best.pth"
+        --run-name "$(basename "$DAV2_RUN")" \
+        --checkpoint "$DAV2_RUN/best.pth" \
+        ${SMOKE:+--override eval_max_frames=20}
 fi
 
 # ---------------------------------------------------------------- summary
-banner "Pipeline complete — result files"
+banner "$LABEL complete — result files"
 for f in "$BASE_EVAL" \
          "$TEMPORAL_RUN/eval_streaming_test.json" \
          "$PHASE3_RUN/eval_phase3_test.json" \
          "$DAV2_RUN/eval_streaming_test.json"; do
     if [[ -f "$f" ]]; then printf '  %s\n' "$f"; else printf '  (missing) %s\n' "$f"; fi
 done
-echo "Compare step-1 vs step-3 JSONs: abs_rel must hold, TAE/flicker_ratio should drop."
+if [[ -n "$SMOKE" ]]; then
+    echo "Smoke artifacts live under runs/smoke_* (safe to delete: rm -rf runs/smoke_*)."
+    echo "All executed steps passed -> the real pipeline runs the same code with more iterations:"
+    echo "    bash videodepth/run_pipeline.sh"
+else
+    echo "Compare step-1 vs step-3 JSONs: abs_rel must hold, TAE/flicker_ratio should drop."
+fi
