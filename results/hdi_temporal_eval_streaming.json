@@ -1,0 +1,23 @@
+{
+  "run_name": "hdi_temporal",
+  "phase": 1,
+  "backbone": "vanilla DINOv2 ViT-L/14",
+  "temporal_enabled": true,
+  "temporal_stage": "2a (frozen spatial, only the ConvGRU aligner trained)",
+  "init_checkpoint": "runs/hdi_enhanced/best.pth",
+  "eval_mode": "streaming (sequence-ordered, full test split)",
+  "checkpoint": "runs/hdi_temporal/best.pth",
+  "checkpoint_caveat": "best.pth was selected during training on a 100-frame PER-FRAME subset metric (abs_rel), which does not measure temporal consistency at all -- see docs/IMPROVEMENTS.md. latest.pth (iter 8000) has not yet been evaluated on the full streaming split and may differ.",
+  "split": "test",
+  "metrics": {
+    "abs_rel": 0.07924857164365956,
+    "rms": 0.4064914396491188,
+    "rms_log": 0.11244397770649252,
+    "log10": 0.03355361101889195,
+    "sigma1": 0.934738873045605,
+    "sigma2": 0.9805253761720198,
+    "sigma3": 0.9941986954498749,
+    "temporal_alignment_error": 0.05843433629840667,
+    "num_frames": 10400
+  }
+}

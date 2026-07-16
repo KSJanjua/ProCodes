@@ -1,0 +1,20 @@
+{
+  "run_name": "phase1_dav2_berhu",
+  "phase": 1,
+  "backbone": "Depth-Anything-V2 encoder (DINOv2 ViT-L/14, depth-fine-tuned)",
+  "loss_regression": "berhu",
+  "config_note": "ASSUMED to be hdi_dav2.yaml with --override loss.regression=berhu (no dedicated hdi_dav2_berhu.yaml is checked into the repo; berhu is an existing REGRESSION_LOSSES registry key in instancedepth/losses/hdi_losses.py, so this is a valid override, not a new loss implementation). Flagging this assumption since the exact command used to produce this run was not recorded alongside it.",
+  "eval_mode": "standard (non-streaming), full test split, with disparity diagnostics",
+  "split": "test",
+  "metrics": {
+    "abs_rel": 0.08640120964712249,
+    "rms": 0.41090903318845307,
+    "rms_log": 0.11991175407113937,
+    "log10": 0.03570623469503167,
+    "sigma1": 0.9268154506385327,
+    "sigma2": 0.9822452817284144,
+    "sigma3": 0.9953121324227406,
+    "disparity_abs_rel": 0.08213646774896635,
+    "disparity_rmse": 0.03331791243480089
+  }
+}

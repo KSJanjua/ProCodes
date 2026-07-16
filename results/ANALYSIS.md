@@ -2,7 +2,9 @@
 
 Raw numbers saved alongside this file: `hdi_enhanced_eval.json`, `hdi_dav2_eval.json`,
 `phase2_run_eval.json`, `phase2_dav2_eval.json`, `phase3_current_eval.json`,
-`phase3_dav2_eval.json`.
+`phase3_dav2_eval.json`, `hdi_enhanced_eval_streaming.json`,
+`hdi_temporal_eval_streaming.json`, `hdi_enhanced_eval_streaming_subset100.json`,
+`hdi_dav2_berhu_eval.json`.
 
 ## 1. Phase 1 — no issue, works as expected
 
@@ -62,3 +64,36 @@ Two things stand out:
 3. Separately verify Phase 2's `phase2_dav2` training wasn't interrupted (Section 2).
 
 I haven't changed any training code for this — happy to implement whichever of these you want to chase first (e.g., a clean from-scratch Phase 3 retrain now that pair formation is fixed, or a longer run, or investigating the compositing step) once you've had a chance to look at the TensorBoard curves.
+
+## 4. Temporal module (FlashDepth stage 2a) — full-split streaming results: correcting my earlier "null result" read
+
+Earlier I called the temporal module a null result based on (a) a misleading 100-frame subset and (b) TAE alone. With the **full 10,400-frame streaming split** now in hand, that read needs correcting.
+
+| metric | hdi_enhanced (baseline) | hdi_temporal (stage 2a) | Δ |
+|---|---|---|---|
+| abs_rel | 0.08200 | 0.07925 | **−3.35%** |
+| rms_log | 0.11479 | 0.11244 | **−2.04%** |
+| log10 | 0.03463 | 0.03355 | **−3.10%** |
+| rms | 0.40707 | 0.40649 | −0.14% (flat) |
+| sigma1 | 0.93143 | 0.93474 | +0.36% (flat) |
+| temporal_alignment_error | 0.058678 | 0.058434 | −0.42% (noise, see below) |
+
+**This is a real, if modest, positive result — not a null one.** Three independent dense-accuracy metrics (abs_rel, rms_log, log10) all improve by 2–3.4%, consistently in the same direction. That's convergent evidence, not one metric wobbling. It's also consistent with the earlier `check_temporal_module.py` finding that `proj_out` moved measurably away from its zero-init (`absmax=0.037`): the ConvGRU aligner learned a genuine per-frame correction to F_2, and that correction improves single-frame depth accuracy — even though **stage 2a only trains the ~1.84 M-parameter aligner** with the rest of the model frozen.
+
+**TAE is still inconclusive, and that's a metric-floor problem, not a model problem.** The subset diagnostic (`hdi_enhanced_eval_streaming_subset100.json`) shows `temporal_alignment_error ≈ sqrt(gt_temporal_delta² + pred_temporal_delta²)` to within 0.15% — i.e. the prediction's frame-to-frame changes are statistically independent of the ground truth's. TAE against ZED stereo GT is floored by GT's own sensor noise; it cannot currently resolve whether temporal *consistency* improved, only that the −0.42% shift is within that floor. The dense-metric gain above did **not** need TAE to be visible — it shows up directly in per-frame accuracy against GT, which isn't subject to the same delta-of-two-noisy-signals problem.
+
+**Revised recommendation:** report this as a genuine (modest) improvement in dense accuracy from the temporal aligner, with the caveat that its effect on frame-to-frame *smoothness* specifically remains unmeasured — TAE needs replacing with a GT-free (optical-flow self-consistency) metric before that specific question can be answered. Also worth running Stage 2b (unfreeze the spatial model, tiered LRs) given 2a already shows a real gain from a frozen backbone — 2b is where FlashDepth's own recipe expects the larger effect.
+
+One open item: `hdi_temporal`'s `best.pth` was checkpoint-selected during training on the same misleading 100-frame per-frame subset (it doesn't measure temporal consistency). The full-split numbers above are still meaningful (dense abs_rel doesn't care how the checkpoint was selected), but `latest.pth` (iter 8000) hasn't been evaluated on the full streaming split yet and may show a different — possibly better — TAE/dense-accuracy balance.
+
+## 5. Phase 1 loss ablation: BerHu underperforms SigLog — keep SigLog
+
+An ad hoc run substituting BerHu for SigLog regression on the DAv2 profile (`hdi_dav2_berhu` — see that file's `config_note` for the assumption this documents about how the run was produced) comes out clearly worse on every metric:
+
+| | abs_rel | rms | sigma1 |
+|---|---|---|---|
+| hdi_dav2 (SigLog) | 0.07781 | 0.38100 | 0.93833 |
+| hdi_dav2_berhu (BerHu) | 0.08640 | 0.41091 | 0.92682 |
+| Δ | **+11.0% worse** | **+7.9% worse** | −1.2% worse |
+
+This is a clean, unambiguous negative ablation, consistent with the loss audit in `docs/IMPROVEMENTS.md` §5: BerHu is an L1/L2 hybrid tuned for less noisy, smaller-scale indoor depth (its original NYU-context); it isn't a better fit than SigLog for this dataset's noisier, longer-range ZED stereo GT. **Verdict: no reason to switch off SigLog** — this closes that item on the sweep list rather than opening a new direction.

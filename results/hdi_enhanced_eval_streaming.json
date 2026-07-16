@@ -1,0 +1,20 @@
+{
+  "run_name": "hdi_enhanced",
+  "phase": 1,
+  "backbone": "vanilla DINOv2 ViT-L/14",
+  "temporal_enabled": false,
+  "eval_mode": "streaming (sequence-ordered, full test split)",
+  "checkpoint": "runs/hdi_enhanced/best.pth",
+  "split": "test",
+  "metrics": {
+    "abs_rel": 0.08199778347562713,
+    "rms": 0.4070730748142187,
+    "rms_log": 0.11478550558730673,
+    "log10": 0.03462624568254866,
+    "sigma1": 0.9314273691263336,
+    "sigma2": 0.9803573513718752,
+    "sigma3": 0.9937624544134507,
+    "temporal_alignment_error": 0.058677831722151574,
+    "num_frames": 10400
+  }
+}
