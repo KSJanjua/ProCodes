@@ -1,26 +1,43 @@
 """Run the full inference pipeline on an ARBITRARY real-world video (e.g.
-downloaded from the internet) and produce a side-by-side comparison video:
+one you captured yourself, or downloaded) and produce a comparison video:
 
     [ original RGB | predicted depth | instance overlay ]
 
-The instance panel (Phase 3 only; suppress with --no-instances) shows the
-instance branch's predicted masks over the original frame, each labelled with
-its predicted depth layer Dep_i in metres.
+The instance panel shows predicted masks over the original frame, each
+labelled with its predicted depth layer Dep_i in metres (--no-instances
+suppresses it, --no-contours drops the outlines).
 
-Works with either the Phase-1 (holistic) or Phase-3 (occlusion-refined) model.
+Works with the Phase-1 (holistic depth), Phase-2 (instances only, no depth
+panel) or Phase-3 (occlusion-refined depth) model. Phase 1 predicts no
+instances of its own -- pass --instance-config/--instance-checkpoint to run
+a Phase-2 model alongside it and get all three panels. That pairing is the
+right way to compare a temporal vs non-temporal Phase 1 on real footage:
+the depth panel changes, while the instance panel is identical by
+construction (Phase 2 never reads Phase 1).
+
 This is the generalization check: the model was trained on a single indoor
 RGB-D sensor with metric depth in (0, 10] m, so out-of-domain scenes (outdoor,
 long sightlines) will saturate the metric range -- use
 ``--normalize percentile`` to colorize by each frame's own 2-98 percentile
-range instead of the fixed metric range when inspecting such footage.
+range instead of the fixed metric range when inspecting such footage. Note
+percentile re-normalizes PER FRAME, which adds its own frame-to-frame colour
+shifts -- avoid it when judging temporal stability.
 
 Usage (server, project root):
 
+    # Phase 3 (depth + instances from the one model):
     python -m scripts.infer_video \\
         --phase 3 --config instancedepth/configs/phase3_current.yaml \\
         --checkpoint runs/phase3_current/best.pth \\
-        --video downloads/street_dance.mp4 \\
-        --out videos/street_dance_phase3
+        --video my_clip.mp4 --out videos/my_clip_phase3
+
+    # Phase-1 depth + Phase-2 instances (temporal vs non-temporal comparison):
+    python -m scripts.infer_video \\
+        --phase 1 --config instancedepth/configs/hdi_temporal.yaml \\
+        --checkpoint runs/hdi_temporal/best.pth \\
+        --instance-config instancedepth/configs/phase2_mask2former.yaml \\
+        --instance-checkpoint runs/phase2_run/best.pth \\
+        --video my_clip.mp4 --out videos/my_clip_temporal
 
 Frames are resized (plain resize, matching the dataset pipeline's own
 convention) to the model's training resolution for inference, and the depth
@@ -148,7 +165,9 @@ def open_frame_source(video: str, fps_fallback: float) -> Tuple[Iterator[np.ndar
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--phase", type=int, choices=[1, 3], required=True)
+    ap.add_argument("--phase", type=int, choices=[1, 2, 3], required=True,
+                    help="1 = holistic depth, 2 = instance branch only (no depth panel), "
+                         "3 = occlusion-refined depth")
     ap.add_argument("--config", required=True)
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--override", nargs="*", default=[])
@@ -167,16 +186,42 @@ def main() -> None:
                     help="category-confidence cut for the instance overlay")
     ap.add_argument("--no-contours", action="store_true",
                     help="don't outline instance masks in the overlay panel")
+    ap.add_argument("--instance-config", default=None,
+                    help="Phase-2 config for the instance panel -- lets --phase 1 (holistic, "
+                         "predicts no instances) still show predicted instances alongside its depth")
+    ap.add_argument("--instance-checkpoint", default=None,
+                    help="Phase-2 checkpoint to pair with --instance-config")
+    ap.add_argument("--instance-override", nargs="*", default=[],
+                    help="dotlist overrides for the Phase-2 instance model")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-    show_instances = args.phase == 3 and not args.no_instances
+    # Validate argument combinations BEFORE loading any (large) model.
+    if bool(args.instance_checkpoint) != bool(args.instance_config):
+        raise SystemExit("--instance-config and --instance-checkpoint must be given together")
+
     predict, max_depth = build_scene_predictor(
         args.phase, args.config, args.checkpoint, args.override,
         inst_score_thresh=args.inst_score_thresh,
     )
+
+    # Phase 1 is holistic and predicts no instances. Supplying a Phase-2
+    # checkpoint runs the instance branch alongside it, so the panel becomes
+    # [RGB | Phase-1 depth | Phase-2 instances] -- the depth panel is what
+    # changes between temporal / non-temporal Phase-1 checkpoints, while the
+    # instances (which never read Phase 1) stay identical by construction.
+    inst_predict = None
+    if args.instance_checkpoint:
+        log.info("loading a separate Phase-2 model for the instance panel")
+        inst_predict, _ = build_scene_predictor(
+            2, args.instance_config, args.instance_checkpoint, args.instance_override,
+            inst_score_thresh=args.inst_score_thresh,
+        )
+    elif args.phase == 1 and not args.no_instances:
+        log.info("phase 1 predicts no instances -- pass --instance-config/--instance-checkpoint "
+                 "to add a Phase-2 instance panel; rendering RGB|depth only")
 
     frames, src_fps, total = open_frame_source(args.video, fps_fallback=args.fps)
     out_fps = src_fps / max(args.stride, 1)
@@ -194,17 +239,22 @@ def main() -> None:
 
         H, W = bgr.shape[:2]
         pred = predict(bgr)
-        depth = pred["depth"]
-        if depth.shape != (H, W):
-            depth = cv2.resize(depth, (W, H), interpolation=cv2.INTER_LINEAR)
-        label = "Phase-3 refined" if args.phase == 3 else "Phase-1 depth"
-        panels = [put_label(bgr, "RGB"),
-                  put_label(colorize(depth, args.normalize, max_depth), label)]
-        if show_instances:
-            overlay = draw_instances_with_depth(bgr, pred["masks"], pred["mask_depths"],
-                                               ids=pred.get("mask_ids"),
-                                               draw_contour=not args.no_contours)
-            panels.append(put_label(overlay, f"instances ({len(pred['masks'])}, Dep_i)"))
+        panels = [put_label(bgr, "RGB")]
+
+        if pred["depth"] is not None:            # Phase 2 alone has no dense depth
+            depth = pred["depth"]
+            if depth.shape != (H, W):
+                depth = cv2.resize(depth, (W, H), interpolation=cv2.INTER_LINEAR)
+            label = "Phase-3 refined" if args.phase == 3 else "Phase-1 depth"
+            panels.append(put_label(colorize(depth, args.normalize, max_depth), label))
+
+        # instances: the model's own (phase 2/3) or the separate Phase-2 model
+        inst = inst_predict(bgr) if inst_predict is not None else pred
+        if not args.no_instances and inst["masks"]:
+            overlay = draw_instances_with_depth(bgr, inst["masks"], inst["mask_depths"],
+                                                ids=inst.get("mask_ids"),
+                                                draw_contour=not args.no_contours)
+            panels.append(put_label(overlay, f"instances ({len(inst['masks'])}, Dep_i)"))
         canvas = np.hstack(panels)
         if writer is None:
             writer, actual_path = open_video_writer(Path(args.out), out_fps,
