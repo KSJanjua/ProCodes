@@ -70,16 +70,20 @@ def _load_rgb(path: str) -> np.ndarray:
     return img   # BGR
 
 
-def _gt_instances(frame: dict, hw: Tuple[int, int]) -> Tuple[List[np.ndarray], List[float]]:
-    """Manifest frame -> (masks, depth layers) from the id-map annotation.
-    Instances without a valid GT depth layer are skipped (no meaningful
-    label to print)."""
+def _gt_instances(frame: dict, hw: Tuple[int, int]) -> Tuple[List[np.ndarray], List[float], List[int]]:
+    """Manifest frame -> (masks, depth layers, track_ids) from the id-map.
+
+    track_ids are returned so the overlay can colour each person consistently
+    across the whole sequence -- the data engine enforces identity consistency,
+    so GT colours are genuinely stable (unlike predictions, which have no
+    temporal tracking). Instances without a valid GT depth layer are skipped
+    (no meaningful label to print)."""
     id_map = cv2.imread(frame["object_mask"], cv2.IMREAD_UNCHANGED)
     if id_map is None:
-        return [], []
+        return [], [], []
     if id_map.shape[:2] != hw:
         id_map = cv2.resize(id_map, (hw[1], hw[0]), interpolation=cv2.INTER_NEAREST)
-    masks, depths = [], []
+    masks, depths, ids = [], [], []
     for inst in frame.get("instances", []):
         d = float(inst.get("depth_layer_m", 0.0))
         if d <= 0.0:
@@ -88,7 +92,8 @@ def _gt_instances(frame: dict, hw: Tuple[int, int]) -> Tuple[List[np.ndarray], L
         if m.any():
             masks.append(m)
             depths.append(d)
-    return masks, depths
+            ids.append(int(inst["track_id"]))
+    return masks, depths, ids
 
 
 def main() -> None:
@@ -112,6 +117,9 @@ def main() -> None:
     ap.add_argument("--inst-score-thresh", type=float, default=0.5,
                     help="category-confidence cut for predicted instances (viz-oriented, "
                          "looser than Phase 3's 0.9 candidate filter)")
+    ap.add_argument("--no-contours", action="store_true",
+                    help="don't outline instance masks in the overlay panel (cleaner video; "
+                         "the translucent fill still shows each mask)")
     ap.add_argument("--scale", type=float, default=1.0,
                     help="resize the final stacked canvas by this factor before writing "
                          "(e.g. 0.5 halves file size; also helps picky encoders with very wide frames)")
@@ -184,12 +192,15 @@ def main() -> None:
 
             if inst_mode in ("pred", "both"):
                 panels.append(put_label(
-                    draw_instances_with_depth(bgr, pred["masks"], pred["mask_depths"]),
+                    draw_instances_with_depth(bgr, pred["masks"], pred["mask_depths"],
+                                              ids=pred.get("mask_ids"),
+                                              draw_contour=not args.no_contours),
                     f"instances (pred Dep_i, {len(pred['masks'])})"))
             if inst_mode in ("gt", "both"):
-                gt_masks, gt_layers = _gt_instances(frame, (H, W))
+                gt_masks, gt_layers, gt_ids = _gt_instances(frame, (H, W))
                 panels.append(put_label(
-                    draw_instances_with_depth(bgr, gt_masks, gt_layers),
+                    draw_instances_with_depth(bgr, gt_masks, gt_layers, ids=gt_ids,
+                                              draw_contour=not args.no_contours),
                     f"instances (GT, {len(gt_masks)})"))
 
             canvas = np.hstack(panels)

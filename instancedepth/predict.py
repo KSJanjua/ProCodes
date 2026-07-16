@@ -73,6 +73,10 @@ def build_scene_predictor(
       masks        list of (H,W) bool instance masks -- empty for Phase 1,
                    which is holistic-only (callers fall back to GT masks)
       mask_depths  list of float -- predicted depth layer Dep_i per mask
+      mask_ids     list of int -- the query index behind each mask; a stable-ish
+                   identifier for consistent visualization colouring (the image
+                   Mask2Former has no temporal tracking, so this is only as
+                   stable as query specialization -- see docs/ARCHITECTURE.md)
 
     ``inst_score_thresh`` is a visualization-oriented category-confidence cut
     (0.5, matching evaluate_phase2/visualize_phase2), deliberately looser than
@@ -107,7 +111,7 @@ def build_scene_predictor(
             x = preprocess(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), tuple(cfg.data.image_size), device)
             out = model(x)
             keep = torch.where(out.scores()[0] > inst_score_thresh)[0]
-            masks, deps = [], []
+            masks, deps, ids = [], [], []
             for q in keep.tolist():
                 m = (out.mask_logits[0, q].sigmoid() > mask_binarize_thresh).float().cpu().numpy()
                 if m.shape != (H, W):
@@ -116,7 +120,8 @@ def build_scene_predictor(
                 if m.any():
                     masks.append(m)
                     deps.append(float(out.depth_layers[0, q]))
-            return dict(depth=None, masks=masks, mask_depths=deps)
+                    ids.append(q)
+            return dict(depth=None, masks=masks, mask_depths=deps, mask_ids=ids)
 
         predict.reset = lambda: None
         return predict, cfg.data.max_depth
@@ -125,7 +130,7 @@ def build_scene_predictor(
         base_predict, max_depth = build_depth_predictor(1, config, checkpoint, overrides)
 
         def predict(bgr: np.ndarray) -> dict:
-            return dict(depth=base_predict(bgr), masks=[], mask_depths=[])
+            return dict(depth=base_predict(bgr), masks=[], mask_depths=[], mask_ids=[])
 
         predict.reset = getattr(base_predict, "reset", lambda: None)
         return predict, max_depth
@@ -144,7 +149,7 @@ def build_scene_predictor(
             out = inf.predict(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
             p2 = out["aux"]["p2"]
             keep = torch.where(p2.scores()[0] > inst_score_thresh)[0]
-            masks, deps = [], []
+            masks, deps, ids = [], [], []
             for q in keep.tolist():
                 m = (p2.mask_logits[0, q].sigmoid() > mask_binarize_thresh).float().cpu().numpy()
                 if m.shape != (H, W):
@@ -153,7 +158,8 @@ def build_scene_predictor(
                 if m.any():
                     masks.append(m)
                     deps.append(float(p2.depth_layers[0, q]))
-            return dict(depth=out["refined"], masks=masks, mask_depths=deps)
+                    ids.append(q)
+            return dict(depth=out["refined"], masks=masks, mask_depths=deps, mask_ids=ids)
 
         predict.reset = inf.reset_temporal_state
         return predict, cfg.data.max_depth

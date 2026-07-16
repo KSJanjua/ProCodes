@@ -150,3 +150,46 @@ def test_open_frame_source_missing_path():
         assert False, "expected FileNotFoundError"
     except FileNotFoundError as e:
         assert "does not exist" in str(e)
+
+
+def test_instance_colour_is_stable_under_depth_reordering():
+    """Regression: colour must follow the instance IDENTITY, not its per-frame
+    depth rank. Two people crossing in depth previously swapped colours every
+    time the ordering flipped -- the 'blue turns green' artifact in videos."""
+    from instancedepth.utils.viz import draw_instances_with_depth
+
+    bgr = np.zeros((40, 80, 3), np.uint8)
+    a = np.zeros((40, 80), bool); a[5:35, 5:35] = True     # person A
+    b = np.zeros((40, 80), bool); b[5:35, 45:75] = True    # person B
+
+    # Sample near the BOTTOM of each mask: the depth label is drawn at the
+    # centroid and extends up-and-right from it (with a thick halo), so any
+    # sample at centroid height risks reading label pixels -- whose text
+    # legitimately differs between the two frames.
+    pa, pb = (32, 8), (32, 48)
+
+    # frame 1: A nearer (2m) than B (5m);  frame 2: they cross -> B nearer
+    f1 = draw_instances_with_depth(bgr, [a, b], [2.0, 5.0], ids=[7, 9], draw_contour=False)
+    f2 = draw_instances_with_depth(bgr, [a, b], [5.0, 2.0], ids=[7, 9], draw_contour=False)
+    assert (f1[pa] == f2[pa]).all(), "A changed colour when depth order flipped"
+    assert (f1[pb] == f2[pb]).all(), "B changed colour when depth order flipped"
+    assert not (f1[pa] == f1[pb]).all(), "A and B must be distinguishable"
+
+    # without ids the old depth-rank behaviour remains (documented fallback)
+    g1 = draw_instances_with_depth(bgr, [a, b], [2.0, 5.0], draw_contour=False)
+    g2 = draw_instances_with_depth(bgr, [a, b], [5.0, 2.0], draw_contour=False)
+    assert not (g1[pa] == g2[pa]).all(), "fallback should be rank-coloured"
+
+
+def test_draw_contour_flag_removes_outlines():
+    """--no-contours must remove the mask outline while keeping the fill."""
+    from instancedepth.utils.viz import draw_instances_with_depth
+
+    bgr = np.zeros((40, 40, 3), np.uint8)
+    m = np.zeros((40, 40), bool); m[10:30, 10:30] = True
+    with_c = draw_instances_with_depth(bgr, [m], [3.0], ids=[1], draw_contour=True)
+    without = draw_instances_with_depth(bgr, [m], [3.0], ids=[1], draw_contour=False)
+    edge, interior = (10, 10), (20, 20)
+    assert not (with_c[edge] == without[edge]).all(), "contour should alter the boundary pixel"
+    assert (with_c[interior] == without[interior]).all(), "fill must be unaffected"
+    assert without[interior].sum() > 0, "fill must still be drawn"

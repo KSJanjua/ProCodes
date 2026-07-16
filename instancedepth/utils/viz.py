@@ -87,15 +87,27 @@ def overlay_masks(bgr: np.ndarray, masks: np.ndarray, alpha: float = 0.45, seed:
 
 
 def draw_instances_with_depth(bgr: np.ndarray, masks: Sequence[np.ndarray],
-                              depths: Sequence[float], alpha: float = 0.45) -> np.ndarray:
-    """Overlay instance masks together with their depth values (metres).
+                              depths: Sequence[float],
+                              ids: Optional[Sequence[int]] = None,
+                              alpha: float = 0.45,
+                              draw_contour: bool = True) -> np.ndarray:
+    """Overlay instance masks with their depth values (metres).
 
-    Instances are drawn far-to-near so the nearest sits on top -- the same
+    Draw order is far-to-near so the nearest instance sits on top -- the same
     occlusion-ordering convention as the dataset's id-map flattening
-    (``data_engine/annotate.py::_flatten_id_map``) and
-    ``scripts/visualize_phase2.py``. Each instance gets a golden-ratio-spaced
-    colour, a translucent fill, a contour, and its depth printed at the mask
-    centroid (dark halo + white text for legibility on any background).
+    (``data_engine/annotate.py::_flatten_id_map``).
+
+    ``ids``: a STABLE per-instance identifier (GT track_id, or the Phase-2
+    query index for predictions). Colour is derived from it, so an instance
+    keeps its colour across frames. Without ``ids`` the colour falls back to
+    depth-rank order, which makes instances swap colours the moment two of
+    them cross in depth -- fine for a single still, misleading in a video.
+    Note that stable *colour* still requires a stable *id*: the image
+    Mask2Former re-assigns queries per frame, so its ids are only as stable
+    as the query specialization (see docs/ARCHITECTURE.md).
+
+    ``draw_contour``: outline each mask. Useful on stills to see exact mask
+    boundaries; switch off for clean video frames.
     """
     out = bgr.copy()
     if len(masks) == 0:
@@ -105,12 +117,14 @@ def draw_instances_with_depth(bgr: np.ndarray, masks: Sequence[np.ndarray],
         m = np.asarray(masks[idx], bool)
         if not m.any():
             continue
-        hue = (draw_i * 0.61803398875) % 1.0          # colour by draw order for max separation
+        key = int(ids[idx]) if ids is not None else draw_i
+        hue = (key * 0.61803398875) % 1.0      # golden-ratio spacing -> distinct neighbours
         r, g, b = colorsys.hsv_to_rgb(hue, 0.65, 1.0)
         color = np.array([b * 255, g * 255, r * 255], np.uint8)   # BGR
         out[m] = ((1 - alpha) * out[m] + alpha * color).astype(np.uint8)
-        contours, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(out, contours, -1, [int(c) for c in color], 2)
+        if draw_contour:
+            contours, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(out, contours, -1, [int(c) for c in color], 2)
         ys, xs = np.nonzero(m)
         cx, cy = int(xs.mean()), int(ys.mean())
         label = f"{float(depths[idx]):.1f}m"

@@ -165,6 +165,8 @@ def main() -> None:
                     help="drop the instance-overlay panel (Phase 3; Phase 1 has no instance branch)")
     ap.add_argument("--inst-score-thresh", type=float, default=0.5,
                     help="category-confidence cut for the instance overlay")
+    ap.add_argument("--no-contours", action="store_true",
+                    help="don't outline instance masks in the overlay panel")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
@@ -199,7 +201,9 @@ def main() -> None:
         panels = [put_label(bgr, "RGB"),
                   put_label(colorize(depth, args.normalize, max_depth), label)]
         if show_instances:
-            overlay = draw_instances_with_depth(bgr, pred["masks"], pred["mask_depths"])
+            overlay = draw_instances_with_depth(bgr, pred["masks"], pred["mask_depths"],
+                                               ids=pred.get("mask_ids"),
+                                               draw_contour=not args.no_contours)
             panels.append(put_label(overlay, f"instances ({len(pred['masks'])}, Dep_i)"))
         canvas = np.hstack(panels)
         if writer is None:

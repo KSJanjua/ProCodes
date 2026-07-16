@@ -108,12 +108,13 @@ def visualize_frame(inferencer: Phase3Inferencer, sample: dict, cfg: Phase3Confi
     p2_probs = p2.mask_logits.sigmoid()[0].float().cpu().numpy()
     p2_deps_all = p2.depth_layers[0].float().cpu().numpy()
     p2_keep = np.where(p2.scores()[0].float().cpu().numpy() > inst_score_thresh)[0]
-    p2_masks, p2_deps = [], []
+    p2_masks, p2_deps, p2_ids = [], [], []
     for q in p2_keep.tolist():
         m = p2_probs[q] >= cfg.candidate.mask_binarize_thresh
         if m.any():
             p2_masks.append(m)
             p2_deps.append(float(p2_deps_all[q]))
+            p2_ids.append(q)
 
     panels = [
         ("RGB", rgb),
@@ -126,7 +127,7 @@ def visualize_frame(inferencer: Phase3Inferencer, sample: dict, cfg: Phase3Confi
         ("refined-base (signed, cap 0.5m)", colorize_signed(refined - base, 0.5)),
         ("GT instance masks", overlay_masks(rgb, gt_masks)),
         (f"Phase-2 instances + Dep_i ({len(p2_masks)})",
-         draw_instances_with_depth(rgb, p2_masks, p2_deps)),
+         draw_instances_with_depth(rgb, p2_masks, p2_deps, ids=p2_ids)),
         ("pair-member pred masks", overlay_masks(rgb, np.array(member_masks)) if member_masks else rgb),
         (f"candidate pairs (P={P})", draw_pairs(rgb, pair_boxes, pair_ious, pair_deps)),
     ]
