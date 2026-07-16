@@ -1,0 +1,46 @@
+# Temporal stage on top of the trained Phase-1 checkpoint.
+# See videodepth/docs/DESIGN.md for the full rationale of every value.
+
+run_name: "video_temporal"
+run_root: "runs"
+seed: 2026
+
+hdi_config: "instancedepth/configs/hdi_enhanced.yaml"
+init_checkpoint: null        # REQUIRED for real runs: runs/hdi_enhanced/best.pth
+freeze_spatial: true         # stage-2a: only the stabilizer trains (clean attribution)
+
+temporal:
+  levels: [2]                # stabilize the finest decoder level F_2
+  d_model: 128
+  num_blocks: 2
+  downsample: 0.25           # 1/4-side recurrence grid (was 0.1 in the inert attempt)
+
+clips:
+  clip_len: 5
+  strides: [1, 2, 4, 8, 16, 24]   # span up to 97 frames — where motion is visible
+  min_seq_len: 60                 # drop the ~50-frame sequences from temporal training
+  motion_weighting: true          # sample clips ∝ measured GT motion
+  motion_floor: 0.15              # static clips stay present (learn to do nothing)
+
+loss:
+  temporal_weight: 1.0       # L = SigLog(per frame) + w * TGM(clip)
+  tgm_order: 1               # VDA first differences; 2 adds acceleration matching
+  tgm_log_space: true
+
+optim:
+  lr: 5.0e-5
+  weight_decay: 0.01
+  total_iters: 12000
+  warmup_iters: 250
+  poly_power: 0.9
+  grad_clip_norm: 1.0
+  precision: "bf16"
+  batch_size: 2
+  num_workers: 4
+  log_every: 50
+  ckpt_every: 1000
+  eval_every: 1000
+
+eval:
+  max_frames: 800            # periodic streaming-eval subset
+  tae_weight: 4.0            # best.pth selected on abs_rel + 4·TAE (streaming)

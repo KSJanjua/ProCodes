@@ -25,6 +25,7 @@ repository map.
 | Doc | What it covers |
 |---|---|
 | **[AUDIT_2026.md](docs/AUDIT_2026.md)** | **Full 3-phase audit: evidence-backed root causes + ranked fixes** |
+| **[videodepth/docs/DESIGN.md](videodepth/docs/DESIGN.md)** | **`videodepth/`: temporal consistency (TGM) + video-aware occlusion handling — the beyond-the-paper extension package** |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | How everything flows (diagrams) |
 | [PHASE3_DESIGN.md](docs/PHASE3_DESIGN.md) | Phase 3 blueprint, Eq. 8–12 |
 | [PHASE3_DIAGNOSIS.md](docs/PHASE3_DIAGNOSIS.md) | Defects D1–D5 found and fixed |

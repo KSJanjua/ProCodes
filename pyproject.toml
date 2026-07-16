@@ -20,4 +20,4 @@ dependencies = [
 dev = ["pytest"]
 
 [tool.setuptools.packages.find]
-include = ["instancedepth*"]
+include = ["instancedepth*", "videodepth*"]
