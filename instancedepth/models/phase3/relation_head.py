@@ -150,7 +150,8 @@ def composite_refined_depth(
         X2, Y2 = int(round(x2 * W)), int(round(y2 * H))
         X2, Y2 = max(X2, X1 + 1), max(Y2, Y1 + 1)
 
-        region_mask = mask_prob[b, q, Y1:Y2, X1:X2] >= binarize_thresh
+        soft = mask_prob[b, q, Y1:Y2, X1:X2]                 # (h,w) sigmoid prob in [0,1]
+        region_mask = soft >= binarize_thresh
         if not bool(region_mask.any()):
             continue
         ratio = F.interpolate(ratio_roi[None], size=(Y2 - Y1, X2 - X1),
@@ -160,16 +161,23 @@ def composite_refined_depth(
 
         base_crop = base_depth[b, 0, Y1:Y2, X1:X2]
         cand = ratio * base_crop                             # 2E * D at full resolution
+
+        # Blend the correction in with the SOFT mask probability as alpha. The
+        # sigmoid mask already ramps smoothly across the silhouette, so the
+        # correction fades in over the boundary instead of switching at a hard
+        # binary edge -- eliminating the seam/ring in the depth map. feather_px
+        # optionally blurs the alpha wider for an even softer transition.
+        alpha = soft
         if feather_px > 0:
-            # box-blur the binary mask into a soft alpha: the correction ramps
-            # in over ~feather_px pixels instead of switching at a hard edge
             k = 2 * feather_px + 1
-            alpha = F.avg_pool2d(region_mask.float()[None, None], k, stride=1,
+            alpha = F.avg_pool2d(alpha[None, None], k, stride=1,
                                  padding=feather_px, count_include_pad=False)[0, 0]
-            alpha = alpha * region_mask.float()              # never write outside the mask
-            cand = alpha * cand + (1.0 - alpha) * base_crop
         cur_layer = layer_buf[b, 0, Y1:Y2, X1:X2]
-        win = region_mask & (layer < cur_layer)              # nearest-LAYER-wins (per instance)
-        refined[b, 0, Y1:Y2, X1:X2] = torch.where(win, cand, refined[b, 0, Y1:Y2, X1:X2])
-        layer_buf[b, 0, Y1:Y2, X1:X2] = torch.where(win, torch.full_like(cur_layer, layer), cur_layer)
+        win = layer <= cur_layer                             # nearest-LAYER-wins (order-independent)
+        blended = (1.0 - alpha) * refined[b, 0, Y1:Y2, X1:X2] + alpha * cand
+        refined[b, 0, Y1:Y2, X1:X2] = torch.where(win, blended, refined[b, 0, Y1:Y2, X1:X2])
+        # a pixel "belongs" to this instance (for depth arbitration) where the
+        # soft mask is confident; the feathered fringe blends but doesn't claim it
+        claim = win & (soft >= binarize_thresh)
+        layer_buf[b, 0, Y1:Y2, X1:X2] = torch.where(claim, torch.full_like(cur_layer, layer), cur_layer)
     return refined

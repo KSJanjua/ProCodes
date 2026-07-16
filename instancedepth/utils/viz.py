@@ -86,6 +86,76 @@ def overlay_masks(bgr: np.ndarray, masks: np.ndarray, alpha: float = 0.45, seed:
     return out
 
 
+class MaskTracker:
+    """Greedy IoU tracker for stable instance identities across video frames
+    (a minimal SORT-style associator). The image Mask2Former segments each
+    frame independently -- no temporal link -- so raw per-frame ids churn,
+    which reads as colour flicker and masks blinking in and out. This assigns
+    each instance a persistent id by matching to the previous frame's masks:
+
+      * a track is drawn only after ``min_hits`` consecutive detections, so a
+        one-frame spurious mask never flashes on screen;
+      * a track survives up to ``max_age`` frames of non-detection, so a brief
+        dropout doesn't blink the instance off and back on.
+
+    Reset (``reset()``) at every sequence boundary. This is a *visualization*
+    aid, not model tracking -- it cannot recover an identity the segmenter
+    genuinely lost, only bridge short gaps and suppress transients.
+    """
+
+    def __init__(self, iou_thresh: float = 0.3, min_hits: int = 2, max_age: int = 5) -> None:
+        self.iou_thresh = iou_thresh
+        self.min_hits = min_hits
+        self.max_age = max_age
+        self.reset()
+
+    def reset(self) -> None:
+        self._tracks: List[dict] = []      # {id, mask, depth, hits, age}
+        self._next_id = 0
+
+    @staticmethod
+    def _iou(a: np.ndarray, b: np.ndarray) -> float:
+        inter = np.logical_and(a, b).sum()
+        if inter == 0:
+            return 0.0
+        return float(inter) / float(np.logical_or(a, b).sum())
+
+    def update(self, masks: Sequence[np.ndarray], depths: Sequence[float]):
+        """Associate this frame's (masks, depths) to existing tracks.
+        Returns (masks, depths, ids) for the tracks that are currently
+        confirmed and visible -- ready to hand to ``draw_instances_with_depth``."""
+        masks = [np.asarray(m, bool) for m in masks]
+        pairs = sorted(
+            ((self._iou(t["mask"], m), ti, di)
+             for ti, t in enumerate(self._tracks) for di, m in enumerate(masks)),
+            reverse=True,
+        )
+        matched_t, matched_d = set(), set()
+        for iou, ti, di in pairs:
+            if iou < self.iou_thresh or ti in matched_t or di in matched_d:
+                continue
+            t = self._tracks[ti]
+            t.update(mask=masks[di], depth=float(depths[di]), hits=t["hits"] + 1, age=0)
+            matched_t.add(ti); matched_d.add(di)
+
+        # Age unmatched EXISTING tracks BEFORE adding new ones -- otherwise a
+        # just-created track would be aged in the same frame and never confirm.
+        for ti, t in enumerate(self._tracks):
+            if ti not in matched_t:
+                t["age"] += 1
+
+        for di, m in enumerate(masks):           # unmatched detections -> new tracks
+            if di in matched_d:
+                continue
+            self._tracks.append(dict(id=self._next_id, mask=m, depth=float(depths[di]), hits=1, age=0))
+            self._next_id += 1
+
+        self._tracks = [t for t in self._tracks if t["age"] <= self.max_age]
+
+        vis = [t for t in self._tracks if t["hits"] >= self.min_hits and t["age"] == 0]
+        return ([t["mask"] for t in vis], [t["depth"] for t in vis], [t["id"] for t in vis])
+
+
 def draw_instances_with_depth(bgr: np.ndarray, masks: Sequence[np.ndarray],
                               depths: Sequence[float],
                               ids: Optional[Sequence[int]] = None,

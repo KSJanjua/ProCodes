@@ -65,7 +65,7 @@ import numpy as np
 
 from instancedepth.predict import build_scene_predictor
 from instancedepth.utils.viz import (
-    colorize_depth, draw_instances_with_depth, open_video_writer, put_label,
+    MaskTracker, colorize_depth, draw_instances_with_depth, open_video_writer, put_label,
 )
 
 log = logging.getLogger("scripts.infer_video")
@@ -186,6 +186,9 @@ def main() -> None:
                     help="category-confidence cut for the instance overlay")
     ap.add_argument("--no-contours", action="store_true",
                     help="don't outline instance masks in the overlay panel")
+    ap.add_argument("--track-instances", action="store_true",
+                    help="stabilize instance identities/colours across frames with a lightweight "
+                         "IoU tracker (suppresses one-frame flicker, bridges brief dropouts)")
     ap.add_argument("--instance-config", default=None,
                     help="Phase-2 config for the instance panel -- lets --phase 1 (holistic, "
                          "predicts no instances) still show predicted instances alongside its depth")
@@ -212,6 +215,7 @@ def main() -> None:
     # [RGB | Phase-1 depth | Phase-2 instances] -- the depth panel is what
     # changes between temporal / non-temporal Phase-1 checkpoints, while the
     # instances (which never read Phase 1) stay identical by construction.
+    tracker = MaskTracker() if args.track_instances else None
     inst_predict = None
     if args.instance_checkpoint:
         log.info("loading a separate Phase-2 model for the instance panel")
@@ -250,11 +254,13 @@ def main() -> None:
 
         # instances: the model's own (phase 2/3) or the separate Phase-2 model
         inst = inst_predict(bgr) if inst_predict is not None else pred
-        if not args.no_instances and inst["masks"]:
-            overlay = draw_instances_with_depth(bgr, inst["masks"], inst["mask_depths"],
-                                                ids=inst.get("mask_ids"),
+        im, idp, iids = inst["masks"], inst["mask_depths"], inst.get("mask_ids")
+        if tracker is not None:
+            im, idp, iids = tracker.update(im, idp)
+        if not args.no_instances and im:
+            overlay = draw_instances_with_depth(bgr, im, idp, ids=iids,
                                                 draw_contour=not args.no_contours)
-            panels.append(put_label(overlay, f"instances ({len(inst['masks'])}, Dep_i)"))
+            panels.append(put_label(overlay, f"instances ({len(im)}, Dep_i)"))
         canvas = np.hstack(panels)
         if writer is None:
             writer, actual_path = open_video_writer(Path(args.out), out_fps,

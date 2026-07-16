@@ -83,10 +83,12 @@ def test_temporal_config_wiring():
         assert not HDIConfig.from_yaml(f"instancedepth/configs/{f}").temporal.enabled, f
 
 
-def test_composite_feathering_ramps_correction():
-    """With feathering, the correction must ramp in at the mask boundary
-    (partial correction) while the mask interior gets the full correction and
-    the outside stays untouched."""
+def test_composite_soft_alpha_blends_at_boundary():
+    """The composite blends the correction with the SOFT mask probability, so
+    the depth transitions smoothly across the silhouette instead of stepping
+    at a hard edge (the boundary-line artifact). A soft mask boundary must
+    therefore yield partial correction, while a confident interior is fully
+    corrected and pixels the mask never touches are untouched."""
     from instancedepth.models.phase3.candidates import PairSet
     from instancedepth.models.phase3.relation_head import composite_refined_depth
 
@@ -97,15 +99,15 @@ def test_composite_feathering_ramps_correction():
         boxes_norm=torch.tensor([[[0.0, 0.0, 0.75, 0.75], [0.5, 0.5, 1.0, 1.0]]]),
         iou=torch.tensor([0.3]),
     )
-    e = torch.full((1, 2, 1, 14, 14), 0.75)      # ratio 1.5 -> 6.0 inside masks
+    e = torch.full((1, 2, 1, 14, 14), 0.75)      # ratio 1.5 -> 6.0 where alpha == 1
     layers = torch.tensor([[2.0, 3.0]])
     mask_prob = torch.zeros(1, 2, H, W)
-    mask_prob[0, 0, 8:40, 8:40] = 1.0
+    mask_prob[0, 0, 8:40, 8:40] = 1.0            # confident interior
+    mask_prob[0, 0, 8:40, 6:8] = 0.6            # a soft fringe (0<alpha<1) at the edge
     mask_prob[0, 1, 44:60, 44:60] = 1.0
 
-    refined = composite_refined_depth(base, pairs, e, layers, mask_prob, 0.5,
-                                      "scalar", feather_px=4)
+    refined = composite_refined_depth(base, pairs, e, layers, mask_prob, 0.5, "scalar")
     assert torch.allclose(refined[0, 0, 20:28, 20:28], torch.full((8, 8), 6.0), atol=1e-3)  # interior: full
-    edge = float(refined[0, 0, 8, 20])            # boundary row: partial correction
-    assert 4.05 < edge < 5.95, f"boundary should be feathered, got {edge}"
-    assert torch.allclose(refined[0, 0, 0:6, 0:6], torch.full((6, 6), 4.0), atol=1e-6)      # outside: untouched
+    fringe = float(refined[0, 0, 20, 6])         # soft fringe: base*(1+0.6*(1.5-1)) = 4*1.3 = 5.2
+    assert abs(fringe - 5.2) < 1e-3, f"soft fringe should blend, got {fringe}"
+    assert torch.allclose(refined[0, 0, 0:5, 0:5], torch.full((5, 5), 4.0), atol=1e-6)      # outside: untouched

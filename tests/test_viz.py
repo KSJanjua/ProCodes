@@ -213,3 +213,39 @@ def test_writers_create_missing_output_dir():
         op = Path(out)
         assert (op.exists() and op.stat().st_size > 0) if op.is_file() \
             else len(list(op.glob("frame_*.png"))) == 3
+
+
+def test_mask_tracker_stable_ids_and_confirmation():
+    """A track keeps its id while it moves; a one-frame spurious mask is not
+    shown until confirmed; a brief dropout doesn't kill an established track."""
+    from instancedepth.utils.viz import MaskTracker
+
+    def person(x):
+        m = np.zeros((40, 100), bool); m[10:30, x:x + 20] = True; return m
+
+    tr = MaskTracker(iou_thresh=0.2, min_hits=2, max_age=2)
+    # frame 1: one person -> not confirmed yet (needs 2 hits)
+    _, _, ids = tr.update([person(5)], [3.0]);        assert ids == []
+    # frame 2: same person, overlapping -> confirmed, gets a stable id
+    _, _, ids = tr.update([person(7)], [3.0]);        assert len(ids) == 1
+    pid = ids[0]
+    # frame 3: person moved but still overlaps -> SAME id (no colour churn)
+    _, _, ids = tr.update([person(10)], [3.0]);       assert ids == [pid]
+    # frame 3 also had a one-frame blip elsewhere -> must NOT be shown
+    _, _, ids = tr.update([person(13), person(70)], [3.0, 8.0])
+    assert pid in ids and len(ids) == 1               # blip suppressed (only 1 hit)
+    # dropout for one frame -> track kept alive (age <= max_age) but not "visible"
+    _, _, ids = tr.update([], [])                     # nobody detected this frame
+    assert ids == []
+    # reappears -> still the same id, not a fresh one
+    _, _, ids = tr.update([person(16)], [3.0]);       assert ids == [pid]
+
+
+def test_mask_tracker_reset():
+    from instancedepth.utils.viz import MaskTracker
+    m = np.zeros((20, 20), bool); m[5:15, 5:15] = True
+    tr = MaskTracker(min_hits=1)
+    ids1 = tr.update([m], [2.0])[2]
+    tr.reset()
+    ids2 = tr.update([m], [2.0])[2]
+    assert ids1 == [0] and ids2 == [0]                # id counter reset per sequence

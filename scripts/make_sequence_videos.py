@@ -57,7 +57,7 @@ import numpy as np
 from instancedepth.data.gid_dataset import GIDInstanceDepthDataset
 from instancedepth.predict import build_scene_predictor
 from instancedepth.utils.viz import (
-    colorize_depth, draw_instances_with_depth, open_video_writer, put_label,
+    MaskTracker, colorize_depth, draw_instances_with_depth, open_video_writer, put_label,
 )
 
 log = logging.getLogger("scripts.make_sequence_videos")
@@ -117,6 +117,11 @@ def main() -> None:
     ap.add_argument("--inst-score-thresh", type=float, default=0.5,
                     help="category-confidence cut for predicted instances (viz-oriented, "
                          "looser than Phase 3's 0.9 candidate filter)")
+    ap.add_argument("--track-instances", action="store_true",
+                    help="stabilize predicted-instance identities across frames with a lightweight "
+                         "IoU tracker (persistent colours, suppresses one-frame flicker, bridges brief "
+                         "dropouts). Reduces the 'colours keep changing' churn; GT instances are already "
+                         "stable via track_id so this only affects predictions.")
     ap.add_argument("--no-contours", action="store_true",
                     help="don't outline instance masks in the overlay panel (cleaner video; "
                          "the translucent fill still shows each mask)")
@@ -158,6 +163,7 @@ def main() -> None:
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    tracker = MaskTracker() if args.track_instances and inst_mode in ("pred", "both") else None
 
     for si, sid in enumerate(seq_ids):
         with open(ann_root / sid / "annotations.json") as f:
@@ -166,6 +172,8 @@ def main() -> None:
         log.info("[%d/%d] %s (%d frames)", si + 1, len(seq_ids), sid, len(frame_keys))
         if hasattr(predict, "reset"):
             predict.reset()   # temporal models: fresh memory per sequence
+        if tracker is not None:
+            tracker.reset()   # fresh instance identities per sequence
 
         writer = None
         actual_path = None
@@ -191,11 +199,13 @@ def main() -> None:
                 panels.append(put_label(colorize_depth(depth, max_depth, far_thresh=max_depth), label))
 
             if inst_mode in ("pred", "both"):
+                pm, pd, pids = pred["masks"], pred["mask_depths"], pred.get("mask_ids")
+                if tracker is not None:                      # stabilize identities across frames
+                    pm, pd, pids = tracker.update(pm, pd)
                 panels.append(put_label(
-                    draw_instances_with_depth(bgr, pred["masks"], pred["mask_depths"],
-                                              ids=pred.get("mask_ids"),
+                    draw_instances_with_depth(bgr, pm, pd, ids=pids,
                                               draw_contour=not args.no_contours),
-                    f"instances (pred Dep_i, {len(pred['masks'])})"))
+                    f"instances (pred Dep_i, {len(pm)})"))
             if inst_mode in ("gt", "both"):
                 gt_masks, gt_layers, gt_ids = _gt_instances(frame, (H, W))
                 panels.append(put_label(
