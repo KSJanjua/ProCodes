@@ -193,3 +193,23 @@ def test_draw_contour_flag_removes_outlines():
     assert not (with_c[edge] == without[edge]).all(), "contour should alter the boundary pixel"
     assert (with_c[interior] == without[interior]).all(), "fill must be unaffected"
     assert without[interior].sum() > 0, "fill must still be drawn"
+
+
+def test_writers_create_missing_output_dir():
+    """Regression (user hit this): writing into a not-yet-existing directory
+    must work -- ffmpeg/cv2 do not create the parent, so the writers must.
+    Covers whichever backend this machine actually selects."""
+    import tempfile
+    from pathlib import Path
+    from instancedepth.utils.viz import open_video_writer
+
+    with tempfile.TemporaryDirectory() as td:
+        target = Path(td) / "does" / "not" / "exist" / "clip"   # 3 missing levels
+        assert not target.parent.exists()
+        writer, out = open_video_writer(target, fps=10.0, frame_wh=(64, 48))
+        for _ in range(3):
+            writer.write(np.zeros((48, 64, 3), np.uint8))
+        writer.release()
+        op = Path(out)
+        assert (op.exists() and op.stat().st_size > 0) if op.is_file() \
+            else len(list(op.glob("frame_*.png"))) == 3

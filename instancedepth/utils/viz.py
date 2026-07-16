@@ -288,6 +288,7 @@ class FfmpegPipeWriter:
 
         w, h = frame_wh
         self.target = Path(target)
+        self.target.parent.mkdir(parents=True, exist_ok=True)   # ffmpeg won't create it
         # High-quality settings: default codec rates visibly blur the fine
         # depth-colormap gradients this project inspects, so pin quality
         # (crf 18 ~ visually lossless for libx264; q:v 3 for mpeg4).
@@ -297,7 +298,9 @@ class FfmpegPipeWriter:
                "-r", f"{fps:g}", "-i", "-",
                "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
                "-c:v", encoder, *quality, "-pix_fmt", "yuv420p", str(self.target)]
-        self._proc = _subprocess.Popen(cmd, stdin=_subprocess.PIPE)
+        # Capture ffmpeg's stderr so a startup failure (bad path, unsupported
+        # option) surfaces in the error instead of vanishing into a broken pipe.
+        self._proc = _subprocess.Popen(cmd, stdin=_subprocess.PIPE, stderr=_subprocess.PIPE)
         self._count = 0
 
     def isOpened(self) -> bool:
@@ -307,9 +310,10 @@ class FfmpegPipeWriter:
         try:
             self._proc.stdin.write(np.ascontiguousarray(frame).tobytes())
         except (BrokenPipeError, OSError) as e:
+            stderr = self._proc.stderr.read().decode(errors="replace").strip() if self._proc.stderr else ""
             raise RuntimeError(
-                f"ffmpeg pipe died while writing frame {self._count} to {self.target} "
-                "(run with -v and check ffmpeg stderr above)") from e
+                f"ffmpeg pipe died while writing frame {self._count} to {self.target}"
+                + (f"\nffmpeg said: {stderr}" if stderr else "")) from e
         self._count += 1
 
     def release(self) -> None:
@@ -350,6 +354,7 @@ def open_video_writer(path: Path, fps: float, frame_wh: Tuple[int, int]):
     3. neither -> ``FrameDumpWriter`` (numbered PNGs + logged stitch command).
 
     Returns (writer, actual_output_path)."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)   # no backend creates it
     for fourcc, suffix in _VIDEO_CODECS:
         p = Path(path).with_suffix(suffix)
         w = cv2.VideoWriter(str(p), cv2.VideoWriter_fourcc(*fourcc), fps, frame_wh)
