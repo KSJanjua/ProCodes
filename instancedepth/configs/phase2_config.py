@@ -53,6 +53,9 @@ class Phase2LossConfig:
 class Phase2DataConfig:
     annotations_root: str = "gid_custom"
     image_size: Tuple[int, int] = (736, 1280)   # (H, W); divisible by 32 for Swin's patch-merging stages
+    max_depth: float = 10.0   # dataset metric range; matches the GIDDatasetConfig default
+                              # Phase-2 training already uses implicitly (visualization
+                              # reads it to colorize GT depth / Dep_i labels)
     min_instance_px: int = 64
     hflip_prob: float = 0.5
     color_jitter: float = 0.0

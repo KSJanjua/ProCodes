@@ -1,17 +1,23 @@
 """Turn held-out test sequences into side-by-side comparison videos:
 
-    [ RGB | (optional GT depth) | predicted depth | (optional instances) ]
+    [ RGB | (GT depth) | (predicted depth) | (pred instances) | (GT instances) ]
 
-one video per sequence, for qualitative evaluation. Works with either the
-Phase-1 (holistic) or the Phase-3 (occlusion-refined) model.
+one video per sequence, for qualitative evaluation. Works with the Phase-1
+(holistic depth), Phase-2 (instance branch) or Phase-3 (occlusion-refined
+depth) model.
 
 The instances panel overlays each instance mask on the RGB frame with its
 depth layer (metres) printed at the mask centroid, drawn far-to-near so
 occlusion ordering reads correctly (same convention as visualize_phase2.py).
-``--instances pred`` uses the frozen Phase-2 branch's predictions (Phase 3
-only -- Phase 1 is holistic and predicts no instances); ``--instances gt``
-uses the dataset's id-map + GT depth layers; ``auto`` (default) picks pred
-for Phase 3 and gt for Phase 1; ``none`` disables the panel.
+``--instances pred`` uses the model's own instance branch (Phase 2/3 only --
+Phase 1 is holistic and predicts none); ``gt`` uses the dataset's id-map + GT
+depth layers; ``both`` draws the two panels side by side (the pred-vs-GT
+comparison); ``auto`` (default) picks pred for Phase 2/3 and gt for Phase 1.
+
+Phase 2 predicts no dense depth, so its videos carry no prediction-depth
+panel. Note its Dep_i comes from an MLP on Mask2Former query embeddings and
+never reads Phase 1, so Phase-2 output is identical regardless of which
+Phase-1 checkpoint exists -- it cannot show a temporal-module difference.
 
 Usage (server, project root):
 
@@ -20,6 +26,12 @@ Usage (server, project root):
         --phase 3 --config instancedepth/configs/phase3_current.yaml \\
         --checkpoint runs/phase3_current/best.pth \\
         --out-dir videos/phase3_current --include-gt --limit-seq 4
+
+    # Phase 2 instance branch, predicted vs GT instances side by side:
+    python -m scripts.make_sequence_videos \\
+        --phase 2 --config instancedepth/configs/phase2_mask2former.yaml \\
+        --checkpoint runs/phase2_run/best.pth \\
+        --out-dir videos/phase2 --include-gt --instances both
 
     # Phase 1 + GT instances:
     python -m scripts.make_sequence_videos \\
@@ -81,7 +93,9 @@ def _gt_instances(frame: dict, hw: Tuple[int, int]) -> Tuple[List[np.ndarray], L
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--phase", type=int, choices=[1, 3], required=True)
+    ap.add_argument("--phase", type=int, choices=[1, 2, 3], required=True,
+                    help="1 = holistic depth, 2 = instance branch only (no dense depth panel), "
+                         "3 = occlusion-refined depth")
     ap.add_argument("--config", required=True)
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--override", nargs="*", default=[])
@@ -91,9 +105,10 @@ def main() -> None:
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--fps", type=float, default=15.0)
     ap.add_argument("--include-gt", action="store_true", help="add a GT depth middle panel")
-    ap.add_argument("--instances", choices=["auto", "pred", "gt", "none"], default="auto",
-                    help="instance-mask panel source: pred (Phase-3's instance branch), "
-                         "gt (dataset id-map), auto (pred for phase 3, gt for phase 1), none")
+    ap.add_argument("--instances", choices=["auto", "pred", "gt", "both", "none"], default="auto",
+                    help="instance-mask panel source: pred (the instance branch's masks + Dep_i), "
+                         "gt (dataset id-map + GT depth layers), both (two panels, side by side -- "
+                         "the pred-vs-GT comparison), auto (pred for phase 2/3, gt for phase 1), none")
     ap.add_argument("--inst-score-thresh", type=float, default=0.5,
                     help="category-confidence cut for predicted instances (viz-oriented, "
                          "looser than Phase 3's 0.9 candidate filter)")
@@ -109,10 +124,13 @@ def main() -> None:
 
     inst_mode = args.instances
     if inst_mode == "auto":
-        inst_mode = "pred" if args.phase == 3 else "gt"
-    if inst_mode == "pred" and args.phase == 1:
-        log.warning("--instances pred is unavailable for phase 1 (holistic-only); using GT instances")
+        inst_mode = "pred" if args.phase in (2, 3) else "gt"
+    if inst_mode in ("pred", "both") and args.phase == 1:
+        log.warning("phase 1 is holistic-only and predicts no instances; using GT instances")
         inst_mode = "gt"
+    if args.phase == 2 and inst_mode == "none":
+        raise SystemExit("--phase 2 with --instances none would render nothing but RGB "
+                         "(Phase 2 predicts no dense depth)")
 
     predict, max_depth = build_scene_predictor(
         args.phase, args.config, args.checkpoint, args.override,
@@ -149,25 +167,30 @@ def main() -> None:
             H, W = bgr.shape[:2]
 
             pred = predict(bgr)
-            depth = pred["depth"]
-            if depth.shape != (H, W):
-                depth = cv2.resize(depth, (W, H), interpolation=cv2.INTER_LINEAR)
             panels = [put_label(bgr, "RGB")]
             if args.include_gt:
                 gt = GIDInstanceDepthDataset._load_depth(frame, man["depth_scale_to_m"])
                 if gt.shape != (H, W):
                     gt = cv2.resize(gt, (W, H), interpolation=cv2.INTER_NEAREST)
                 panels.append(put_label(colorize_depth(gt, max_depth, far_thresh=max_depth), "GT depth"))
-            label = "Phase-3 refined" if args.phase == 3 else "Phase-1 depth"
-            panels.append(put_label(colorize_depth(depth, max_depth, far_thresh=max_depth), label))
-            if inst_mode != "none":
-                if inst_mode == "pred":
-                    masks, layer_depths = pred["masks"], pred["mask_depths"]
-                    inst_label = f"instances (pred Dep, {len(masks)})"
-                else:
-                    masks, layer_depths = _gt_instances(frame, (H, W))
-                    inst_label = f"instances (GT, {len(masks)})"
-                panels.append(put_label(draw_instances_with_depth(bgr, masks, layer_depths), inst_label))
+
+            # Phase 2 predicts instances only -- no dense-depth panel to draw.
+            if pred["depth"] is not None:
+                depth = pred["depth"]
+                if depth.shape != (H, W):
+                    depth = cv2.resize(depth, (W, H), interpolation=cv2.INTER_LINEAR)
+                label = "Phase-3 refined" if args.phase == 3 else "Phase-1 depth"
+                panels.append(put_label(colorize_depth(depth, max_depth, far_thresh=max_depth), label))
+
+            if inst_mode in ("pred", "both"):
+                panels.append(put_label(
+                    draw_instances_with_depth(bgr, pred["masks"], pred["mask_depths"]),
+                    f"instances (pred Dep_i, {len(pred['masks'])})"))
+            if inst_mode in ("gt", "both"):
+                gt_masks, gt_layers = _gt_instances(frame, (H, W))
+                panels.append(put_label(
+                    draw_instances_with_depth(bgr, gt_masks, gt_layers),
+                    f"instances (GT, {len(gt_masks)})"))
 
             canvas = np.hstack(panels)
             if args.scale != 1.0:

@@ -94,8 +94,12 @@ if critical "P2 train" python -m instancedepth.engine.train_phase2 --config "$P2
         --config "$P2_CONFIG" --checkpoint "runs/$P2_RUN/best.pth"
     optional "P2 viz" python -m scripts.visualize_phase2 \
         --config "$P2_CONFIG" --checkpoint "runs/$P2_RUN/best.pth"
+    # instance branch on the test set: predicted masks + Dep_i beside GT
+    optional "P2 videos" python -m scripts.make_sequence_videos \
+        --phase 2 --config "$P2_CONFIG" --checkpoint "runs/$P2_RUN/best.pth" \
+        --out-dir "videos/$P2_RUN" --include-gt --instances both --limit-seq "$VIDEO_SEQS"
 else
-    skip "P2 eval/viz (P2 training failed)"
+    skip "P2 eval/viz/videos (P2 training failed)"
 fi
 
 # =========================== PHASE 3 =========================================
