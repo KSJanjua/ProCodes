@@ -16,11 +16,12 @@
 #   6. [opt-in] Fine-tune full DAv2 (encoder+DPT head) — the AbsRel lever.
 #      Enable by setting DAV2_WEIGHTS=/path/to/depth_anything_v2_metric_hypersim_vitl.pth
 #
-# Overridable env vars (defaults match the recorded runs on this server):
+# Overridable env vars (defaults match the checkpoints actually on this
+# server: Phase 1 = hdi_dav2, Phase 2 = phase2_run):
 #   P1_CKPT=runs/hdi_dav2/best.pth          Phase-1 spatial checkpoint
-#   P2_CKPT=runs/phase2_dav2/best.pth       Phase-2 checkpoint (Phase 3 needs it)
+#   P2_CKPT=runs/phase2_run/best.pth        Phase-2 checkpoint (Phase 3 needs it)
 #   TEMPORAL_CFG=videodepth/configs/video_temporal_dav2.yaml
-#   PHASE3_CFG=instancedepth/configs/phase3_dav2.yaml
+#   PHASE3_CFG=videodepth/configs/phase3_dav2_p2run.yaml
 #   DAV2_WEIGHTS=                            (unset = skip step 6)
 #   FORCE=                                   (1 = rerun steps whose outputs exist)
 
@@ -28,9 +29,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."     # repo root, wherever the script is called from
 
 P1_CKPT="${P1_CKPT:-runs/hdi_dav2/best.pth}"
-P2_CKPT="${P2_CKPT:-runs/phase2_dav2/best.pth}"
+P2_CKPT="${P2_CKPT:-runs/phase2_run/best.pth}"
 TEMPORAL_CFG="${TEMPORAL_CFG:-videodepth/configs/video_temporal_dav2.yaml}"
-PHASE3_CFG="${PHASE3_CFG:-instancedepth/configs/phase3_dav2.yaml}"
+PHASE3_CFG="${PHASE3_CFG:-videodepth/configs/phase3_dav2_p2run.yaml}"
 DAV2_WEIGHTS="${DAV2_WEIGHTS:-}"
 FORCE="${FORCE:-}"
 
@@ -94,7 +95,7 @@ fi
 # ---------------------------------------------------------------- step 4
 banner "[4/6] Phase-3 training, bounded pair-attention head ($PHASE3_CFG)"
 if [[ ! -f "$P1_CKPT" || ! -f "$P2_CKPT" ]]; then
-    skip "needs both $P1_CKPT and $P2_CKPT (set P2_CKPT=... — e.g. runs/phase2_run/best.pth)"
+    skip "needs both $P1_CKPT and $P2_CKPT (set P1_CKPT=/P2_CKPT=... to your checkpoints)"
 elif ! fresh "$PHASE3_RUN/best.pth"; then
     skip "already trained: $PHASE3_RUN/best.pth"
 else
