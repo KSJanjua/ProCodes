@@ -114,16 +114,24 @@ class Trainer:
             losses = self.compute_loss(self.model, batch, self.device)
             total = losses["total"]
 
-        if self.scaler.is_enabled():
-            self.scaler.scale(total).backward()
-            self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.optim.grad_clip_norm)
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-        else:
-            total.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.optim.grad_clip_norm)
-            self.optimizer.step()
+        # A batch can yield a loss with no path to any trainable parameter --
+        # e.g. Phase 3 with a frozen depth branch (freeze_phase1) on a batch
+        # with no valid occlusion pairs, where the criterion falls back to
+        # ``base_depth.sum()*0`` whose only grad path was the (now frozen)
+        # Phase-1 branch. Nothing to learn from it: skip backward/step rather
+        # than let ``backward()`` raise "does not require grad". The LR
+        # schedule still advances so the run stays on its iteration budget.
+        if total.requires_grad:
+            if self.scaler.is_enabled():
+                self.scaler.scale(total).backward()
+                self.scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.optim.grad_clip_norm)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                total.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.optim.grad_clip_norm)
+                self.optimizer.step()
         self.scheduler.step()
 
         return {k: float(v.detach().item()) for k, v in losses.items()}

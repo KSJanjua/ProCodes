@@ -75,3 +75,35 @@ def test_fit_single_group_optimizer_logs_without_indexerror(tmp_path):
     assert len(trainer.optimizer.param_groups) == 1
     trainer.fit()                       # must not raise IndexError
     assert (tmp_path / "run" / "latest.pth").exists()
+
+
+def test_fit_skips_step_when_loss_has_no_grad(tmp_path):
+    """Phase-3 + freeze_phase1 on a pair-less batch yields a loss detached
+    from every trainable param (base_depth.sum()*0 with Phase 1 frozen).
+    Trainer.fit must skip that step, not crash on backward()."""
+    torch.manual_seed(0)
+    model = torch.nn.Linear(4, 1)
+    for p in model.parameters():
+        p.requires_grad_(False)          # everything frozen -> no grad path
+    cfg = _Cfg(data=_Data(annotations_root=str(tmp_path)))
+
+    seen = {"n": 0}
+
+    def compute_loss(m, batch, device):
+        seen["n"] += 1
+        # constant, no grad_fn -- exactly the frozen/pair-less fallback
+        return {"total": torch.zeros((), requires_grad=False)}
+
+    def one_group(m, ocfg):
+        # optimizer over an (empty) trainable set, as build_phase3_optimizer
+        # would produce when the depth branch is frozen and there's no head
+        params = [p for p in m.parameters() if p.requires_grad] or [torch.zeros(1, requires_grad=True)]
+        return torch.optim.SGD(params, lr=ocfg.lr)
+
+    trainer = Trainer(
+        cfg=cfg, model=model, compute_loss=compute_loss,
+        train_loader=_loader(), run_dir=tmp_path / "run",
+        eval_fn=None, device=torch.device("cpu"), build_optimizer_fn=one_group,
+    )
+    trainer.fit()                        # must not raise
+    assert seen["n"] >= cfg.optim.total_iters   # steps ran, just skipped the update
