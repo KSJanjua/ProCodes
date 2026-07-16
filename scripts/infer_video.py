@@ -31,13 +31,13 @@ Usage (server, project root):
         --checkpoint runs/phase3_current/best.pth \\
         --video my_clip.mp4 --out videos/my_clip_phase3
 
-    # Phase-1 depth + Phase-2 instances (temporal vs non-temporal comparison):
+    # Compare two depth models in one video [RGB | enhanced | temporal]:
     python -m scripts.infer_video \\
-        --phase 1 --config instancedepth/configs/hdi_temporal.yaml \\
-        --checkpoint runs/hdi_temporal/best.pth \\
-        --instance-config instancedepth/configs/phase2_mask2former.yaml \\
-        --instance-checkpoint runs/phase2_run/best.pth \\
-        --video my_clip.mp4 --out videos/my_clip_temporal
+        --phase 1 --config instancedepth/configs/hdi_enhanced.yaml \\
+        --checkpoint runs/hdi_enhanced/best.pth --label hdi_enhanced \\
+        --compare-config instancedepth/configs/hdi_temporal.yaml \\
+        --compare-checkpoint runs/hdi_temporal/best.pth --compare-label hdi_temporal \\
+        --video my_clip.mp4 --out videos/compare --no-instances
 
 Frames are resized (plain resize, matching the dataset pipeline's own
 convention) to the model's training resolution for inference, and the depth
@@ -196,6 +196,15 @@ def main() -> None:
                     help="Phase-2 checkpoint to pair with --instance-config")
     ap.add_argument("--instance-override", nargs="*", default=[],
                     help="dotlist overrides for the Phase-2 instance model")
+    ap.add_argument("--label", default=None,
+                    help="label for the main depth panel (default: 'Phase-1 depth' / 'Phase-3 refined')")
+    ap.add_argument("--compare-config", default=None,
+                    help="a SECOND depth model (same phase) to run alongside -- adds a panel so the "
+                         "output is [RGB | depth | compare-depth | (instances)]. Both stream the video "
+                         "independently, so this is the way to compare e.g. hdi_enhanced vs hdi_temporal.")
+    ap.add_argument("--compare-checkpoint", default=None, help="checkpoint for --compare-config")
+    ap.add_argument("--compare-override", nargs="*", default=[])
+    ap.add_argument("--compare-label", default="compare", help="label for the compare-depth panel")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
@@ -204,11 +213,25 @@ def main() -> None:
     # Validate argument combinations BEFORE loading any (large) model.
     if bool(args.instance_checkpoint) != bool(args.instance_config):
         raise SystemExit("--instance-config and --instance-checkpoint must be given together")
+    if bool(args.compare_checkpoint) != bool(args.compare_config):
+        raise SystemExit("--compare-config and --compare-checkpoint must be given together")
 
     predict, max_depth = build_scene_predictor(
         args.phase, args.config, args.checkpoint, args.override,
         inst_score_thresh=args.inst_score_thresh,
     )
+    main_label = args.label or ("Phase-3 refined" if args.phase == 3 else "Phase-1 depth")
+
+    # Optional second depth model for a side-by-side comparison (e.g. baseline
+    # vs temporal Phase 1). Same phase; both stream the video with their own
+    # state.
+    compare_predict = None
+    if args.compare_checkpoint:
+        log.info("loading a second depth model for the compare panel (%s)", args.compare_label)
+        compare_predict, _ = build_scene_predictor(
+            args.phase, args.compare_config, args.compare_checkpoint, args.compare_override,
+            inst_score_thresh=args.inst_score_thresh,
+        )
 
     # Phase 1 is holistic and predicts no instances. Supplying a Phase-2
     # checkpoint runs the instance branch alongside it, so the panel becomes
@@ -226,6 +249,10 @@ def main() -> None:
     elif args.phase == 1 and not args.no_instances:
         log.info("phase 1 predicts no instances -- pass --instance-config/--instance-checkpoint "
                  "to add a Phase-2 instance panel; rendering RGB|depth only")
+
+    for pr in (predict, compare_predict, inst_predict):   # fresh temporal state for this stream
+        if pr is not None and hasattr(pr, "reset"):
+            pr.reset()
 
     frames, src_fps, total = open_frame_source(args.video, fps_fallback=args.fps)
     out_fps = src_fps / max(args.stride, 1)
@@ -245,12 +272,17 @@ def main() -> None:
         pred = predict(bgr)
         panels = [put_label(bgr, "RGB")]
 
+        def _depth_panel(dmap, label):
+            if dmap.shape != (H, W):
+                dmap = cv2.resize(dmap, (W, H), interpolation=cv2.INTER_LINEAR)
+            return put_label(colorize(dmap, args.normalize, max_depth), label)
+
         if pred["depth"] is not None:            # Phase 2 alone has no dense depth
-            depth = pred["depth"]
-            if depth.shape != (H, W):
-                depth = cv2.resize(depth, (W, H), interpolation=cv2.INTER_LINEAR)
-            label = "Phase-3 refined" if args.phase == 3 else "Phase-1 depth"
-            panels.append(put_label(colorize(depth, args.normalize, max_depth), label))
+            panels.append(_depth_panel(pred["depth"], main_label))
+        if compare_predict is not None:
+            cdepth = compare_predict(bgr)["depth"]
+            if cdepth is not None:
+                panels.append(_depth_panel(cdepth, args.compare_label))
 
         # instances: the model's own (phase 2/3) or the separate Phase-2 model
         inst = inst_predict(bgr) if inst_predict is not None else pred
