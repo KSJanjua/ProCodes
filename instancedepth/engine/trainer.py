@@ -148,8 +148,15 @@ class Trainer:
             if self.iteration % self.cfg.optim.log_every == 0:
                 for k, v in loss_dict.items():
                     self.writer.add_scalar(f"train/{k}", v, self.iteration)
-                self.writer.add_scalar("train/lr_backbone", self.optimizer.param_groups[0]["lr"], self.iteration)
-                self.writer.add_scalar("train/lr_head", self.optimizer.param_groups[1]["lr"], self.iteration)
+                # Log each param group's LR by index -- robust to optimizers
+                # with a single group (e.g. a frozen-backbone stage where the
+                # empty group is dropped: the video temporal stage, or Phase 3
+                # with freeze_phase1) as well as the usual backbone+head pair.
+                groups = self.optimizer.param_groups
+                names = ["lr_backbone", "lr_head"] if len(groups) == 2 \
+                    else [f"lr_group{i}" for i in range(len(groups))]
+                for name, g in zip(names, groups):
+                    self.writer.add_scalar(f"train/{name}", g["lr"], self.iteration)
                 log.info("iter %d/%d  total=%.4f", self.iteration, self.cfg.optim.total_iters, loss_dict["total"])
 
             if self.iteration % self.cfg.optim.ckpt_every == 0:
