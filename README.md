@@ -32,6 +32,7 @@ repository map.
 | [TEMPORAL_DESIGN.md](docs/TEMPORAL_DESIGN.md) | FlashDepth temporal integration |
 | [FLASHDEPTH_ANALYSIS.md](docs/FLASHDEPTH_ANALYSIS.md) | What was adopted vs rejected |
 | [IMPROVEMENTS.md](docs/IMPROVEMENTS.md) | Results analysis + loss audit |
+| [presentation/](docs/presentation/instancedepth-journey.html) | 8-minute research-journey slide deck (open in a browser; `F` fullscreen, `N` notes, `T` timer) |
 
 ## Repository layout
 
