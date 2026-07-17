@@ -337,3 +337,30 @@ def test_colorize_infer_video_drange_branch():
     flat = iv.colorize(d, mode="metric", max_depth=10.0)
     windowed = iv.colorize(d, mode="metric", max_depth=10.0, drange=(0.0, 5.0))
     assert _spread(windowed) > _spread(flat)
+
+
+# --------------------------------------------------------------------------- #
+# infer_video panel composition must produce a CONSTANT canvas width across
+# frames even when some frames have instances and others don't -- a video
+# writer rejects a differently-sized frame mid-stream (the crash --track-
+# instances exposed: the tracker withholds instances until confirmed, so the
+# first frame had no instance panel and later frames did).
+# --------------------------------------------------------------------------- #
+def test_infer_video_constant_canvas_width_with_and_without_instances():
+    from instancedepth.utils.viz import draw_instances_with_depth, put_label
+    H, W = 48, 64
+    bgr = np.full((H, W, 3), 100, np.uint8)
+    depth_panel = put_label(np.zeros((H, W, 3), np.uint8), "depth")
+
+    def compose(masks, deps):
+        # mirrors scripts.infer_video: RGB | depth | instances(always, when shown)
+        panels = [put_label(bgr, "RGB"), depth_panel]
+        panel = draw_instances_with_depth(bgr, masks, deps) if masks else bgr
+        panels.append(put_label(panel, f"instances ({len(masks)}, Dep_i)"))
+        return np.hstack(panels)
+
+    m = np.zeros((H, W), bool); m[10:30, 10:30] = True
+    with_inst = compose([m], [2.5])         # a later frame: has an instance
+    without = compose([], [])               # frame 1 under --track-instances: none yet
+    assert with_inst.shape == without.shape  # identical size -> writer never crashes
+    assert without.shape[1] == 3 * W         # three constant-width panels

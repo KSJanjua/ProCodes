@@ -275,6 +275,15 @@ def main() -> None:
         log.info("phase 1 predicts no instances -- pass --instance-config/--instance-checkpoint "
                  "to add a Phase-2 instance panel; rendering RGB|depth only")
 
+    # Whether an instance panel is drawn is decided ONCE here -- not per frame
+    # by whether that frame happened to have instances. A video writer demands
+    # every frame be the identical size, so the panel COUNT must be constant:
+    # frames with no instances (e.g. the first frames under --track-instances,
+    # which the tracker withholds until a track is confirmed) still get an
+    # (un-overlaid) instance panel so the canvas width never changes.
+    has_instance_source = inst_predict is not None or args.phase in (2, 3)
+    show_instances = has_instance_source and not args.no_instances
+
     for pr in (predict, compare_predict, inst_predict):   # fresh temporal state for this stream
         if pr is not None and hasattr(pr, "reset"):
             pr.reset()
@@ -332,18 +341,28 @@ def main() -> None:
                 panels.append(_depth_panel(cdepth, args.compare_label))
 
         # instances: the model's own (phase 2/3) or the separate Phase-2 model
-        inst = inst_predict(bgr) if inst_predict is not None else pred
-        im, idp, iids = inst["masks"], inst["mask_depths"], inst.get("mask_ids")
-        if tracker is not None:
-            im, idp, iids = tracker.update(im, idp)
-        if not args.no_instances and im:
-            overlay = draw_instances_with_depth(bgr, im, idp, ids=iids,
-                                                draw_contour=not args.no_contours)
-            panels.append(put_label(overlay, f"instances ({len(im)}, Dep_i)"))
+        if show_instances:
+            inst = inst_predict(bgr) if inst_predict is not None else pred
+            im, idp, iids = inst["masks"], inst["mask_depths"], inst.get("mask_ids")
+            if tracker is not None:
+                im, idp, iids = tracker.update(im, idp)
+            # Always append the panel (constant canvas width); overlay when
+            # this frame has instances, otherwise the plain frame.
+            panel = draw_instances_with_depth(bgr, im, idp, ids=iids,
+                                              draw_contour=not args.no_contours) if im else bgr
+            panels.append(put_label(panel, f"instances ({len(im)}, Dep_i)"))
         canvas = np.hstack(panels)
         if writer is None:
             writer, actual_path = open_video_writer(Path(args.out), out_fps,
                                                     (canvas.shape[1], canvas.shape[0]))
+            expected_wh = (canvas.shape[1], canvas.shape[0])
+        elif (canvas.shape[1], canvas.shape[0]) != expected_wh:
+            # Safety net (e.g. a frame directory with mixed image sizes): a
+            # video writer can't take a differently-sized frame, so match the
+            # first frame's size rather than crash mid-stream.
+            log.warning("frame %d canvas %dx%d != writer %dx%d -- resizing to match",
+                        idx, canvas.shape[1], canvas.shape[0], *expected_wh)
+            canvas = cv2.resize(canvas, expected_wh, interpolation=cv2.INTER_AREA)
         writer.write(canvas)
         written += 1
         if written % 50 == 0:
