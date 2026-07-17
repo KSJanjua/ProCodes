@@ -266,12 +266,13 @@ svg .mut{fill:var(--mut)} svg .faint{fill:var(--faint)}
       <text x="952" y="146" text-anchor="middle" class="m" font-size="13" fill="#F5B63F">PASS 3</text>
       <text x="952" y="180" text-anchor="middle" font-size="21" font-weight="700">Fix the overlaps</text>
       <text x="952" y="208" text-anchor="middle" font-size="15" class="mut">reason about pairs</text>
-      <!-- temporal recurrence (ours): the whole per-frame pass's state is carried to the NEXT
-           frame -- an unrolled across-frames loop, NOT a Pass-3 -> Pass-1 edge within one frame -->
-      <path d="M 952 260 L 952 320 L 352 320 L 352 260" fill="none" stroke="#F2836C" stroke-width="2" stroke-dasharray="7 7" marker-end="url(#ar)"/>
-      <text x="300" y="300" text-anchor="end" font-size="11.5" fill="#F2836C" font-weight="700">↻ next frame</text>
-      <rect x="486" y="296" width="336" height="48" rx="24" fill="#0B0F14" stroke="#F2836C" stroke-width="2"/>
-      <text x="654" y="326" text-anchor="middle" font-size="15" fill="#F2836C" font-weight="700">+ ours: remember time · across frames</text>
+      <!-- temporal memory (ours): a band UNDER the whole per-frame pipeline; its only feed is a
+           short recurrence arrow up into Pass 1 for the NEXT frame -- deliberately NOT a long
+           Pass-3 -> Pass-1 line, which read as a within-frame data edge. -->
+      <rect x="244" y="292" width="816" height="52" rx="20" fill="rgba(242,131,108,.10)" stroke="#F2836C" stroke-width="2" stroke-dasharray="7 7"/>
+      <text x="652" y="323" text-anchor="middle" font-size="15" fill="#F2836C" font-weight="700">+ ours: memory — keeps each person across frames</text>
+      <path d="M 300 292 C 300 274, 322 262, 352 262" fill="none" stroke="#F2836C" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#ar)"/>
+      <text x="238" y="286" text-anchor="middle" font-size="11.5" fill="#F2836C" font-weight="700">↻ next frame</text>
       <text x="1096" y="190" font-size="15" class="faint">per</text><text x="1096" y="210" font-size="15" class="faint">frame</text>
     </svg>
   </div>
