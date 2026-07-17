@@ -94,10 +94,10 @@ class RunManifest:
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(asdict(self), f, indent=2)
 
     @classmethod
     def load(cls, path: Path) -> "RunManifest":
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             return cls(**json.load(f))

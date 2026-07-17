@@ -8,11 +8,56 @@ scripts/infer_video.py) don't each re-implement the phase dispatch.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Callable, List, Tuple
 
 import cv2
 import numpy as np
+
+log = logging.getLogger("instancedepth.predict")
+
+
+def _build_phase3_inferencer(cfg, checkpoint: str):
+    """Dispatch to the Phase-3 inferencer matching this checkpoint's relation-
+    head architecture.
+
+    The paper-faithful MLP Φo (``models/phase3/relation_head.py``) and the
+    videodepth package's bounded pair-attention head
+    (``videodepth/models/occlusion.py``) have different state-dict keys and
+    shapes, so loading a checkpoint trained with one into a model built with
+    the other raises immediately (docs/AUDIT_2026.md). Peek the checkpoint's
+    own keys and pick the matching class -- the same detect-from-file-and-log
+    pattern already used for the DAv2 encoder checkpoint in
+    ``models/backbone/dinov2_wrapper.py`` -- so callers (and this module)
+    never need a --relation-head flag or prior knowledge of the checkpoint.
+
+    ``instancedepth`` stays videodepth-independent for the common case: the
+    import of ``videodepth`` only happens, lazily, for a checkpoint that
+    actually needs it.
+    """
+    import torch
+
+    ckpt = torch.load(str(checkpoint), map_location="cpu", weights_only=False)
+    keys = ckpt.get("model", ckpt).keys()
+    del ckpt   # this load was only to peek; both inferencers reload from disk themselves
+
+    # Pure key check, inlined (not imported from videodepth): keeps the
+    # vanilla path -- the overwhelming common case -- free of any
+    # videodepth import. Must stay in lockstep with
+    # videodepth.models.phase3_video.is_bounded_relation_head_checkpoint,
+    # which the test suite checks agree.
+    is_bounded = any(k.startswith("relation_head.cross.") for k in keys)
+
+    if is_bounded:
+        log.info("Checkpoint '%s' looks like a videodepth Phase-3 checkpoint "
+                 "(bounded pair-attention relation head); using Phase3VideoInferencer.",
+                 checkpoint)
+        from videodepth.models.phase3_video import Phase3VideoInferencer
+        return Phase3VideoInferencer(cfg, checkpoint)
+
+    from instancedepth.models.phase3.inference import Phase3Inferencer
+    return Phase3Inferencer(cfg, checkpoint)
 
 
 def build_depth_predictor(
@@ -42,10 +87,9 @@ def build_depth_predictor(
 
     if phase == 3:
         from instancedepth.configs.phase3_config import Phase3Config
-        from instancedepth.models.phase3.inference import Phase3Inferencer
 
         cfg = Phase3Config.from_yaml_with_overrides(config, overrides)
-        inf = Phase3Inferencer(cfg, checkpoint)
+        inf = _build_phase3_inferencer(cfg, checkpoint)
 
         def predict(bgr: np.ndarray) -> np.ndarray:
             return inf.predict(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))["refined"]
@@ -139,10 +183,9 @@ def build_scene_predictor(
         import torch
 
         from instancedepth.configs.phase3_config import Phase3Config
-        from instancedepth.models.phase3.inference import Phase3Inferencer
 
         cfg = Phase3Config.from_yaml_with_overrides(config, overrides)
-        inf = Phase3Inferencer(cfg, checkpoint)
+        inf = _build_phase3_inferencer(cfg, checkpoint)
 
         def predict(bgr: np.ndarray) -> dict:
             H, W = bgr.shape[:2]

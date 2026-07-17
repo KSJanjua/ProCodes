@@ -252,14 +252,14 @@ class Phase3Config:
     def from_yaml(cls, path: str | Path) -> "Phase3Config":
         import yaml
 
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return cls.from_dict(yaml.safe_load(f) or {})
 
     @classmethod
     def from_yaml_with_overrides(cls, path: str | Path, dotlist: Optional[list] = None) -> "Phase3Config":
         import yaml
 
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
         for item in dotlist or []:
             key, _, value = item.partition("=")

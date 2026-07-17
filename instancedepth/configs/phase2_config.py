@@ -123,7 +123,7 @@ class Phase2Config:
     def from_yaml(cls, path: str | Path) -> "Phase2Config":
         import yaml
 
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return cls.from_dict(yaml.safe_load(f) or {})
 
     @classmethod
@@ -132,7 +132,7 @@ class Phase2Config:
 
         from instancedepth.configs.config import _coerce, _set_dotted  # reuse Phase 1's helpers, not duplicated
 
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
         for item in dotlist or []:
             key, _, value = item.partition("=")

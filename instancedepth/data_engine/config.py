@@ -158,5 +158,5 @@ class DataEngineConfig:
     def from_yaml(cls, path: str | Path) -> "DataEngineConfig":
         import yaml
 
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return cls.from_dict(yaml.safe_load(f) or {})

@@ -336,3 +336,96 @@ def test_bounded_head_incompatible_with_vanilla_head_statedict():
 def test_evaluate_phase3_video_module_imports():
     import importlib
     importlib.import_module("videodepth.engine.evaluate_phase3_video")
+
+
+# --------------------------------------------------------------------------- #
+# instancedepth.predict._build_phase3_inferencer: auto-detect vanilla vs
+# bounded relation-head checkpoints so scripts/infer_video.py and
+# make_sequence_videos.py work on EITHER checkpoint type with zero flags
+# (docs/AUDIT_2026.md: this exact mismatch crashed scripts/infer_video.py
+# before this dispatcher existed -- same root cause evaluate_phase3_video.py
+# fixed for the eval path).
+# --------------------------------------------------------------------------- #
+def _vanilla_keys():
+    # "relation_head." prefixed to match how these keys actually appear in a
+    # full Phase3Model checkpoint (this head is nested as self.relation_head);
+    # the bare module's own state_dict() has no such prefix.
+    from instancedepth.models.phase3.relation_head import OcclusionRelationHead
+    head = OcclusionRelationHead(per_member_channels=10, hidden_dim=16)
+    return [f"relation_head.{k}" for k in head.state_dict()]
+
+
+def _bounded_keys():
+    head = BoundedPairAttentionHead(per_member_channels=10, hidden_dim=16)
+    return [f"relation_head.{k}" for k in head.state_dict()]
+
+
+def test_bounded_detector_agrees_on_real_head_keys():
+    """The two independent detectors -- the pure one in videodepth (unit-
+    tested here) and the inlined copy in instancedepth/predict.py (kept in
+    lockstep by convention, checked by test_predict_and_videodepth_detectors_
+    agree below) -- must classify real state-dict keys from both heads
+    correctly."""
+    from videodepth.models.phase3_video import is_bounded_relation_head_checkpoint
+    assert is_bounded_relation_head_checkpoint(_bounded_keys()) is True
+    assert is_bounded_relation_head_checkpoint(_vanilla_keys()) is False
+    assert is_bounded_relation_head_checkpoint([]) is False
+
+
+def test_predict_and_videodepth_detectors_agree():
+    """instancedepth/predict.py inlines its own copy of the bounded-head
+    check (so the common/vanilla path never imports videodepth). Read that
+    inlined check straight out of the source and prove it agrees with the
+    canonical videodepth implementation on both real key sets -- if someone
+    edits one without the other, this fails."""
+    import inspect
+    import instancedepth.predict as predict_mod
+    from videodepth.models.phase3_video import is_bounded_relation_head_checkpoint
+
+    src = inspect.getsource(predict_mod._build_phase3_inferencer)
+    assert 'startswith("relation_head.cross.")' in src, (
+        "instancedepth/predict.py's inlined detector no longer matches the "
+        "marker videodepth.models.phase3_video.is_bounded_relation_head_checkpoint "
+        "uses -- update both together.")
+
+    inlined = lambda keys: any(k.startswith("relation_head.cross.") for k in keys)
+    for keys in (_bounded_keys(), _vanilla_keys(), []):
+        assert inlined(keys) == is_bounded_relation_head_checkpoint(keys)
+
+
+def test_build_phase3_inferencer_dispatches_by_checkpoint_content(tmp_path, monkeypatch):
+    """End-to-end (no real weights): a fake checkpoint with bounded-head keys
+    routes to Phase3VideoInferencer; one with vanilla keys routes to
+    Phase3Inferencer. Both constructors are monkeypatched to avoid needing
+    DINOv2/Mask2Former weights -- this test is about DISPATCH, not model
+    construction (that's covered by the existing model-level tests)."""
+    import instancedepth.predict as predict_mod
+
+    calls = []
+
+    class _FakeInferencer:
+        def __init__(self, cfg, checkpoint):
+            calls.append(type(self).__name__)
+
+    monkeypatch.setattr(
+        "videodepth.models.phase3_video.Phase3VideoInferencer",
+        type("FakeVideoInferencer", (_FakeInferencer,), {}))
+    monkeypatch.setattr(
+        "instancedepth.models.phase3.inference.Phase3Inferencer",
+        type("FakeVanillaInferencer", (_FakeInferencer,), {}))
+
+    bounded_ckpt = tmp_path / "bounded.pth"
+    torch.save({"model": {k: torch.zeros(1) for k in _bounded_keys()}}, bounded_ckpt)
+    vanilla_ckpt = tmp_path / "vanilla.pth"
+    torch.save({"model": {k: torch.zeros(1) for k in _vanilla_keys()}}, vanilla_ckpt)
+
+    predict_mod._build_phase3_inferencer(cfg=None, checkpoint=str(bounded_ckpt))
+    predict_mod._build_phase3_inferencer(cfg=None, checkpoint=str(vanilla_ckpt))
+    assert calls == ["FakeVideoInferencer", "FakeVanillaInferencer"]
+
+
+def test_phase3_video_inferencer_module_imports():
+    import importlib
+    importlib.import_module("videodepth.models.phase3_video")
+    from videodepth.models.phase3_video import Phase3VideoInferencer, is_bounded_relation_head_checkpoint
+    assert callable(Phase3VideoInferencer) and callable(is_bounded_relation_head_checkpoint)
