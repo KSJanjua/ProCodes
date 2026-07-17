@@ -266,10 +266,12 @@ svg .mut{fill:var(--mut)} svg .faint{fill:var(--faint)}
       <text x="952" y="146" text-anchor="middle" class="m" font-size="13" fill="#F5B63F">PASS 3</text>
       <text x="952" y="180" text-anchor="middle" font-size="21" font-weight="700">Fix the overlaps</text>
       <text x="952" y="208" text-anchor="middle" font-size="15" class="mut">reason about pairs</text>
-      <!-- temporal loop (ours) -->
+      <!-- temporal recurrence (ours): the whole per-frame pass's state is carried to the NEXT
+           frame -- an unrolled across-frames loop, NOT a Pass-3 -> Pass-1 edge within one frame -->
       <path d="M 952 260 L 952 320 L 352 320 L 352 260" fill="none" stroke="#F2836C" stroke-width="2" stroke-dasharray="7 7" marker-end="url(#ar)"/>
-      <rect x="540" y="296" width="228" height="48" rx="24" fill="#0B0F14" stroke="#F2836C" stroke-width="2"/>
-      <text x="654" y="326" text-anchor="middle" font-size="17" fill="#F2836C" font-weight="700">+ ours: remember time</text>
+      <text x="300" y="300" text-anchor="end" font-size="11.5" fill="#F2836C" font-weight="700">↻ next frame</text>
+      <rect x="486" y="296" width="336" height="48" rx="24" fill="#0B0F14" stroke="#F2836C" stroke-width="2"/>
+      <text x="654" y="326" text-anchor="middle" font-size="15" fill="#F2836C" font-weight="700">+ ours: remember time · across frames</text>
       <text x="1096" y="190" font-size="15" class="faint">per</text><text x="1096" y="210" font-size="15" class="faint">frame</text>
     </svg>
   </div>

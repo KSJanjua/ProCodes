@@ -277,8 +277,8 @@ for i, (col, colt, tag, head, sub) in enumerate(passes):
     text(s, x, 4.15, 2.85, 0.5, sub, size=14, color=MUT, align=PP_ALIGN.CENTER)
     if i < 2:
         arrow(s, x + 2.9, 3.68, 0.22)
-box(s, 4.4, 5.3, 4.6, 0.7, fill=BG, line=BADT, line_w=2.0)
-text(s, 4.4, 5.3, 4.6, 0.7, "+ ours: remember time (between frames)", size=16,
+box(s, 3.9, 5.3, 5.6, 0.7, fill=BG, line=BADT, line_w=2.0)
+text(s, 3.9, 5.3, 5.6, 0.7, "+ ours: remember time -- state carried to the next frame", size=15,
      color=BADT, bold=True, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
 footer(s, "Following the ICCV 2025 recipe -- then extending it where video demands more.")
 
