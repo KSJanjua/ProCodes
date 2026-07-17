@@ -199,7 +199,45 @@ svg .mut{fill:var(--mut)} svg .faint{fill:var(--faint)}
   </div>
 </section>
 
-<!-- ================= 5 · IDEA ================= -->
+<!-- ================= 5 · DATASET (we built it) ================= -->
+<section class="slide" data-notes="~35s — The unglamorous truth, and a real contribution. There was no dataset for this. All we were handed was RGB frames and their raw depth maps — no masks, no identities, no per-person depth, nothing the method needs. So we built the entire ground-truth stack ourselves: segment every person, give each a stable identity across the whole video, assign each their depth layer, and label who occludes whom. Everything to the right of the arrow is ours. The method is only as good as the data under it — and we made the data.">
+  <div class="kicker">The foundation</div>
+  <h2>There was no dataset. So we built one.</h2>
+  <div class="body" style="align-items:center">
+    <svg viewBox="0 0 1128 340" style="width:100%">
+      <defs><marker id="arD" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#5C6B7E"/></marker></defs>
+      <!-- given -->
+      <text x="150" y="40" text-anchor="middle" class="m" font-size="13" fill="#93A3B5">ALL WE HAD</text>
+      <rect x="60" y="66" width="180" height="96" rx="12" fill="#131A23" stroke="rgba(233,237,243,.16)"/>
+      <text x="150" y="120" text-anchor="middle" font-size="19">RGB frames</text>
+      <rect x="60" y="182" width="180" height="96" rx="12" fill="#131A23" stroke="rgba(233,237,243,.16)"/>
+      <text x="150" y="228" text-anchor="middle" font-size="19">depth maps</text>
+      <text x="150" y="256" text-anchor="middle" font-size="19">(raw)</text>
+      <!-- arrow: built by us -->
+      <line x1="256" y1="172" x2="360" y2="172" stroke="#5C6B7E" stroke-width="2" marker-end="url(#arD)"/>
+      <text x="308" y="150" text-anchor="middle" class="m" font-size="12" fill="#F5B63F">WE BUILT</text>
+      <!-- built stack -->
+      <g font-size="18">
+        <rect x="376" y="70"  width="330" height="46" rx="10" fill="#131A23" stroke="#1FA491" stroke-width="1.5"/>
+        <circle cx="404" cy="93" r="7" fill="#1FA491"/><text x="424" y="99">Segment every person &nbsp;→&nbsp; masks</text>
+        <rect x="376" y="128" width="330" height="46" rx="10" fill="#131A23" stroke="#3E6FD9" stroke-width="1.5"/>
+        <circle cx="404" cy="151" r="7" fill="#3E6FD9"/><text x="424" y="157">Stable identity across the video</text>
+        <rect x="376" y="186" width="330" height="46" rx="10" fill="#131A23" stroke="#B07D18" stroke-width="1.5"/>
+        <circle cx="404" cy="209" r="7" fill="#B07D18"/><text x="424" y="215">Per-person depth layer</text>
+        <rect x="376" y="244" width="330" height="46" rx="10" fill="#131A23" stroke="#F2836C" stroke-width="1.5"/>
+        <circle cx="404" cy="267" r="7" fill="#F2836C"/><text x="424" y="273">Who occludes whom</text>
+      </g>
+      <!-- example placeholder -->
+      <rect x="748" y="70" width="330" height="220" rx="12" fill="#0E141C" stroke="rgba(245,182,63,.5)" stroke-dasharray="6 6"/>
+      <text x="913" y="168" text-anchor="middle" class="m" font-size="12" fill="#F5B63F">I5 · one annotated frame</text>
+      <text x="913" y="192" text-anchor="middle" font-size="13" fill="#93A3B5">RGB → masks → IDs → layers</text>
+      <text x="913" y="322" text-anchor="middle" font-size="15" fill="#3ED2BC">every annotation hand-built — 100% ours ✓</text>
+    </svg>
+  </div>
+  <div class="foot-line">Pixels and depth in; a fully-annotated instance-depth video dataset out.</div>
+</section>
+
+<!-- ================= 6 · IDEA ================= -->
 <section class="slide" data-notes="~40s — The whole idea in one picture, following the ICCV-2025 InstanceDepth recipe. Pass 1 paints the scene's depth. Pass 2 finds each person and their depth layer. Pass 3 looks at every overlapping pair and fixes the depths where they collide. Our addition wraps the whole thing in time: remember people between frames.">
   <div class="kicker">Our idea</div>
   <h2>Three passes over every frame</h2>
@@ -238,98 +276,111 @@ svg .mut{fill:var(--mut)} svg .faint{fill:var(--faint)}
   <div class="foot-line">Following the ICCV 2025 recipe — then extending it where video demands more.</div>
 </section>
 
-<!-- ================= 6 · PHASE-1 RESULTS ================= -->
-<section class="slide" data-notes="~45s — Pass 1 results. Show the strip (I2): scenes come out sharp and metrically sound. The two mini-bars carry the honest headline: overall error (RMS) already BETTER than the paper's; relative error worse — and we traced that to near-range pixels, which REL weights hardest. That diagnosis becomes Slide 11's biggest improvement.">
-  <div class="kicker" style="color:var(--p1t)">Pass 1 · scene depth</div>
-  <h2>Pass 1 works — with one gap</h2>
-  <div class="body" style="flex-direction:column;gap:22px">
-    <div class="ph" style="flex:1.2">
-      <span class="id">I2 · IMAGE STRIP</span>
-      <span class="what">Two scenes × ( RGB | ground truth | our depth ) — pick one crowded, one simple</span>
-      <span class="spec">≈1128×300 · scripts/visualize_hdi.py panels</span>
-    </div>
-    <div style="display:flex;gap:34px;align-items:stretch">
-      <!-- paired mini-bars: lower is better; direct-labeled; blue=paper amber=ours -->
-      <svg viewBox="0 0 560 150" style="flex:1.1" role="img" aria-label="RMS error: ours 0.38 beats paper 0.397. Relative error: ours 0.078 vs paper 0.045.">
-        <text x="0" y="18" class="m" font-size="13" fill="#93A3B5">OVERALL ERROR (RMS) · lower wins</text>
-        <rect x="0"  y="30" width="248" height="16" rx="4" fill="#3E6FD9"/>
-        <rect x="0"  y="52" width="238" height="16" rx="4" fill="#B07D18"/>
-        <text x="256" y="43" class="m num" font-size="14" fill="#93A3B5">0.397 paper</text>
-        <text x="246" y="65" class="m num" font-size="14" fill="#F5B63F">0.380 ours ✓</text>
-        <text x="0" y="100" class="m" font-size="13" fill="#93A3B5">RELATIVE ERROR (REL) · lower wins</text>
-        <rect x="0" y="112" width="140" height="16" rx="4" fill="#3E6FD9"/>
-        <rect x="0" y="134" width="243" height="16" rx="4" fill="#B07D18"/>
-        <text x="148" y="125" class="m num" font-size="14" fill="#93A3B5">0.045 paper</text>
-        <text x="251" y="147" class="m num" font-size="14" fill="#F2836C">0.078 ours → the gap</text>
-      </svg>
-      <div class="card" style="flex:1;display:flex;align-items:center">
-        <p style="font-size:19px;line-height:1.5">Scenes come out <b>sharp</b>.<br>The remaining error hides <b style="color:var(--p3t)">up close</b> — exactly where people are.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ================= 7 · PHASE-2 RESULTS ================= -->
-<section class="slide" data-notes="~45s — Pass 2 results. Masks are excellent on our data (I3). Then the discovery (V3): play the flicker clip — the segmenter re-answers 'who is who' from scratch every frame, so the same person keeps changing colour. Identity doesn't exist yet; it's re-invented 30 times a second. Also: it generalizes poorly outside our lab's data — noted for slide 12.">
-  <div class="kicker" style="color:var(--p2t)">Pass 2 · finding people</div>
-  <h2>It finds people — then forgets who they are</h2>
+<!-- ================= 7 · PHASE-1 RESULTS ================= -->
+<section class="slide" data-notes="~50s — Pass 1 results, and the payoff of the temporal fix. Left: scenes come out sharp (I2). Right, the real numbers on the full 10,400-frame test set: once we froze the scene model and added only the memory module, EVERY number improved at once — the depth got more accurate (relative error 0.078 → 0.072) AND steadier (the flicker ratio dropped). This is the module that used to do nothing; now it earns its place. Footnote if asked: our overall error already edges the paper's on our own, harder single-sensor data.">
+  <div class="kicker" style="color:var(--p1t)">Pass 1 · scene depth + memory</div>
+  <h2>Adding memory made it sharper <span style="color:var(--goodt)">and</span> steadier</h2>
   <div class="body">
     <div style="flex:1;display:flex;flex-direction:column;gap:10px">
       <div class="ph" style="flex:1">
-        <span class="id">I3 · IMAGE GRID</span>
-        <span class="what">RGB | true masks | predicted masks — two scenes</span>
-        <span class="spec">≈540×430 · scripts/visualize_phase2.py</span>
+        <span class="id">I2 · IMAGE STRIP</span>
+        <span class="what">Two scenes × ( RGB | ground truth | our depth )</span>
+        <span class="spec">≈540×430 · scripts/visualize_hdi.py</span>
       </div>
-      <div class="cap">On our dataset: crisp, reliable masks.</div>
+      <div class="cap">Sharp, metric scene depth.</div>
     </div>
+    <div style="flex:1.15;display:flex;flex-direction:column;gap:14px">
+      <svg viewBox="0 0 560 250" role="img" aria-label="Baseline vs plus-memory on the full test set: relative error 0.078 down to 0.072, flicker ratio 0.94 down to 0.92, accuracy 93.8 up to 94.1 percent.">
+        <text x="0" y="16" class="m" font-size="12.5" fill="#93A3B5">FULL TEST SET (10,400 frames) · baseline → + memory</text>
+        <!-- rel error -->
+        <text x="0" y="52" font-size="15">Accuracy error <tspan class="mut" font-size="12">(lower wins)</tspan></text>
+        <rect x="250" y="40" width="150" height="15" rx="4" fill="#3E6FD9"/><text x="408" y="52" class="m num" font-size="13" fill="#93A3B5">.078</text>
+        <rect x="250" y="60" width="140" height="15" rx="4" fill="#B07D18"/><text x="398" y="72" class="m num" font-size="13" fill="#F5B63F">.072 ✓</text>
+        <!-- flicker -->
+        <text x="0" y="112" font-size="15">Flicker <tspan class="mut" font-size="12">(lower = steadier)</tspan></text>
+        <rect x="250" y="100" width="150" height="15" rx="4" fill="#3E6FD9"/><text x="408" y="112" class="m num" font-size="13" fill="#93A3B5">.94</text>
+        <rect x="250" y="120" width="146" height="15" rx="4" fill="#B07D18"/><text x="404" y="132" class="m num" font-size="13" fill="#F5B63F">.92 ✓</text>
+        <!-- accuracy -->
+        <text x="0" y="172" font-size="15">Accuracy <tspan class="mut" font-size="12">(higher wins)</tspan></text>
+        <rect x="250" y="160" width="140" height="15" rx="4" fill="#3E6FD9"/><text x="398" y="172" class="m num" font-size="13" fill="#93A3B5">93.8%</text>
+        <rect x="250" y="180" width="150" height="15" rx="4" fill="#B07D18"/><text x="408" y="192" class="m num" font-size="13" fill="#F5B63F">94.1% ✓</text>
+        <text x="0" y="234" font-size="14" fill="#3ED2BC">every metric moved the right way — at once ✓</text>
+      </svg>
+    </div>
+  </div>
+  <div class="foot-line">Blue = scene model alone · amber = + the memory module (scene model frozen).</div>
+</section>
+
+<!-- ================= 8 · PHASE-2 RESULTS ================= -->
+<section class="slide" data-notes="~50s — Pass 2. Masks are excellent on our data (I3). The problem we hit: the segmenter re-answers 'who is who' from scratch every frame, so the same person strobes colours — awful for a demo. The fix: match each person to the previous frame by overlap, and hold their identity even through a brief disappearance. Show the two clips side by side (V3a flicker → V3b stable). Demo note to self: this is the --track-instances flag; always run the demo with it on.">
+  <div class="kicker" style="color:var(--p2t)">Pass 2 · finding &amp; following people</div>
+  <h2>It finds people — and now <span style="color:var(--goodt)">keeps</span> who they are</h2>
+  <div class="body">
     <div style="flex:1;display:flex;flex-direction:column;gap:10px">
       <div class="ph" style="flex:1">
-        <span class="id">V3 · VIDEO</span>
+        <span class="id">V3a · VIDEO — BEFORE</span>
         <span class="what">Identity flicker: the same person strobing colours frame to frame</span>
-        <span class="spec">≈540×430 · 8s loop · make_sequence_videos.py --phase 2 (no tracker)</span>
+        <span class="spec">≈540×360 · make_sequence_videos.py (no tracker)</span>
       </div>
-      <div class="cap"><b style="color:var(--badt)">Same person, new colour every frame.</b></div>
+      <div class="cap"><b style="color:var(--badt)">Before: new colour every frame.</b></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+      <div class="ph" style="flex:1;border-color:rgba(62,210,188,.5)">
+        <span class="id" style="color:var(--goodt);border-color:rgba(62,210,188,.5)">V3b · VIDEO — AFTER</span>
+        <span class="what">Same clip, identities locked: one person, one colour, start to finish</span>
+        <span class="spec">≈540×360 · infer_video.py --track-instances</span>
+      </div>
+      <div class="cap"><b style="color:var(--goodt)">After: one person, one colour. ✓</b></div>
     </div>
   </div>
+  <div class="foot-line">Match people frame-to-frame by overlap, and hold identity through brief disappearances.</div>
 </section>
 
-<!-- ================= 8 · PHASE-3 TWIST ================= -->
-<section class="slide" data-notes="~60s — The plot twist; slow down here. Pass 3 exists to FIX occlusions. Instead, whole-scene error nearly doubled — 0.078 to 0.139. Why: pass 3 only ever graded itself on people-pixels, so the rest of the scene quietly rotted. The fix wasn't more training — it was LESS: freeze the scene model so refinement can touch only what it understands. Error pinned back at 0.078, and refinement can no longer make anything worse. Also show V4/I4: the halo artifact every edit left around people, now capped.">
-  <div class="kicker" style="color:var(--p3t)">Pass 3 · the twist</div>
-  <h2>Our fix made things <span style="color:var(--badt)">worse</span>.</h2>
+<!-- ================= 9 · PHASE-3 TWIST → RESOLVED ================= -->
+<section class="slide" data-notes="~60s — The plot twist and its resolution; slow down. Pass 3 exists to FIX occlusions. Our first version did the opposite — whole-scene error nearly doubled (0.078 → 0.139), because it only ever graded itself on people-pixels and let the rest of the scene rot; and where people overlapped, it actually made depth worse. The fix wasn't more training, it was LESS: freeze the scene model, and cap how far any single correction can push. Now the numbers on the full test set: the scene is pinned (no drift), AND exactly where people overlap — the whole point — error finally drops, 0.056 → 0.055. Refinement went from harmful to helpful. Show V4: the halos it used to leave, now gone.">
+  <div class="kicker" style="color:var(--p3t)">Pass 3 · the twist, resolved</div>
+  <h2>From <span style="color:var(--badt)">harmful</span> to <span style="color:var(--goodt)">helpful</span></h2>
   <div class="body">
-    <div style="flex:1.15;display:flex;flex-direction:column;gap:18px">
-      <svg viewBox="0 0 560 300" role="img" aria-label="Scene error rose from 0.078 to 0.139 during refinement; freezing pass 1 pinned it back at 0.078.">
-        <text x="0" y="24" class="m" font-size="13" fill="#93A3B5">WHOLE-SCENE ERROR WHILE “REFINING” PEOPLE</text>
-        <text x="0"   y="98"  class="m num" font-size="44" font-weight="700" fill="#E9EDF3">0.078</text>
-        <text x="210" y="98"  font-size="34" fill="#5C6B7E">→</text>
-        <text x="262" y="98"  class="m num" font-size="44" font-weight="700" fill="#E4573D">0.139</text>
-        <text x="262" y="126" font-size="15" fill="#F2836C">scene quietly corrupted (+78%)</text>
-        <line x1="0" y1="158" x2="560" y2="158" stroke="rgba(233,237,243,.12)"/>
-        <text x="0" y="196" class="m" font-size="13" fill="#93A3B5">THE FIX: FREEZE THE SCENE MODEL</text>
-        <text x="0"   y="262" class="m num" font-size="44" font-weight="700" fill="#3ED2BC">0.078</text>
-        <text x="145" y="262" font-size="19" fill="#3ED2BC">pinned ✓</text>
-        <text x="145" y="288" font-size="15" fill="#93A3B5">refinement now can't degrade anything</text>
+    <div style="flex:1.2;display:flex;flex-direction:column;gap:14px">
+      <svg viewBox="0 0 560 268" role="img" aria-label="First version: scene error drifted 0.078 to 0.139 and refinement hurt overlaps. After freezing: scene pinned at 0.078, and overlap error improved from 0.056 to 0.055.">
+        <text x="0" y="15" class="m" font-size="12.5" fill="#E4573D">FIRST VERSION — refinement backfired</text>
+        <text x="0"  y="52" class="m num" font-size="30" font-weight="700" fill="#E9EDF3">0.078</text>
+        <text x="112" y="52" font-size="22" fill="#5C6B7E">→</text>
+        <text x="146" y="52" class="m num" font-size="30" font-weight="700" fill="#E4573D">0.139</text>
+        <text x="270" y="44" font-size="13" fill="#F2836C">whole scene drifted (+78%),</text>
+        <text x="270" y="62" font-size="13" fill="#F2836C">and overlaps got worse too</text>
+        <line x1="0" y1="86" x2="560" y2="86" stroke="rgba(233,237,243,.12)"/>
+        <text x="0" y="118" class="m" font-size="12.5" fill="#3ED2BC">AFTER THE FIX — freeze the scene · cap each edit</text>
+        <!-- pinned -->
+        <text x="0" y="150" font-size="14" class="mut">Whole scene</text>
+        <text x="0" y="182" class="m num" font-size="30" font-weight="700" fill="#3ED2BC">0.078</text>
+        <text x="128" y="182" font-size="15" fill="#3ED2BC">pinned — no drift ✓</text>
+        <!-- overlap improved -->
+        <text x="300" y="150" font-size="14" class="mut">Where people OVERLAP</text>
+        <text x="300" y="182" class="m num" font-size="26" font-weight="700" fill="#93A3B5">0.056</text>
+        <text x="392" y="182" font-size="20" fill="#5C6B7E">→</text>
+        <text x="420" y="182" class="m num" font-size="26" font-weight="700" fill="#3ED2BC">0.055</text>
+        <text x="300" y="212" font-size="14" fill="#3ED2BC">refinement finally helps where it should ✓</text>
+        <text x="0" y="252" font-size="13" class="mut">full test set · 10,400 frames · 3,083 with real overlap</text>
       </svg>
-      <div class="card"><p style="font-size:18px;line-height:1.5">It graded itself <b>only on people-pixels</b> — so everything else decayed, unseen.</p></div>
     </div>
     <div style="flex:1;display:flex;flex-direction:column;gap:12px">
       <div class="ph" style="flex:1.4">
         <span class="id">V4 · VIDEO / TOGGLE</span>
         <span class="what">Before vs after: depth halos ringing every person → clean, capped corrections</span>
-        <span class="spec">≈520×300 · visualize_phase3.py pair or infer_video --compare</span>
+        <span class="spec">≈520×300 · infer_video.py --compare</span>
       </div>
       <div class="ph" style="flex:1">
         <span class="id">I4 · ZOOM CROP</span>
-        <span class="what">The ring artifact, close up — an edit's hard edge in the depth map</span>
+        <span class="what">The old ring artifact, close up — now bounded away</span>
         <span class="spec">≈520×200 · error-panel crop</span>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ================= 9 · PROBLEMS ================= -->
-<section class="slide" data-notes="~40s — The road, honestly. Five potholes: (1) our first temporal module trained for days and changed nothing — nothing in the loss ever rewarded smoothness. (2) Our flicker metric turned out to be measuring sensor noise — improvement was mathematically invisible. (3) The halos from slide 8. (4) A library update silently renamed weights — checkpoints stopped loading. (5) A crash that only appeared on frames with nobody overlapping. Each one is now a test in the repo.">
+<!-- ================= 10 · PROBLEMS ================= -->
+<section class="slide" data-notes="~40s — The road, honestly. Five potholes: (1) our first temporal module trained for days and changed nothing — nothing in the loss ever rewarded smoothness. (2) Our flicker metric turned out to be measuring sensor noise — improvement was mathematically invisible. (3) The halos from slide 9. (4) A library update silently renamed weights — checkpoints stopped loading. (5) A crash that only appeared on frames with nobody overlapping. Each one is now a test in the repo.">
   <div class="kicker">The road</div>
   <h2>What the journey actually looked like</h2>
   <div class="body" style="align-items:center">
@@ -365,8 +416,8 @@ svg .mut{fill:var(--mut)} svg .faint{fill:var(--faint)}
   </div>
 </section>
 
-<!-- ================= 10 · LESSONS ================= -->
-<section class="slide" data-notes="~30s — Four lessons, each earned by a slide-9 scar. 1: our temporal module was silent because no loss asked it to do anything. 2: check what your metric CAN detect before optimizing it. 3: the pass-3 fix was freezing, not fine-tuning. 4: a 10-minute rehearsal run now catches crashes before days of GPU time.">
+<!-- ================= 11 · LESSONS ================= -->
+<section class="slide" data-notes="~30s — Four lessons, each earned by a slide-10 scar. 1: our temporal module was silent because no loss asked it to do anything. 2: check what your metric CAN detect before optimizing it. 3: the pass-3 fix was freezing, not fine-tuning. 4: a 10-minute rehearsal run now catches crashes before days of GPU time.">
   <div class="kicker">Lessons</div>
   <h2>What we learned</h2>
   <div class="body" style="align-items:center">
@@ -379,56 +430,56 @@ svg .mut{fill:var(--mut)} svg .faint{fill:var(--faint)}
   </div>
 </section>
 
-<!-- ================= 11 · CURRENT IMPROVEMENTS ================= -->
-<section class="slide" data-notes="~50s — What's cooking right now, all four born from the diagnosis. 1: a loss that punishes flicker but never real motion — smoothness finally has a gradient. 2: train on clips where movement actually happens (~100-frame spans). 3: pass-3 edits are capped at ±15% — halos bounded by construction. 4: a memory per person — while someone is hidden, their depth is carried from when we last saw them; works with zero retraining. 5: borrow the full pretrained depth prior to close the near-range REL gap from slide 6.">
-  <div class="kicker">In progress</div>
-  <h2>What we're building right now</h2>
+<!-- ================= 12 · CURRENT IMPROVEMENTS ================= -->
+<section class="slide" data-notes="~45s — Where we are right now. The three fixes on the left already landed and are in the numbers you just saw: a loss that punishes flicker not motion, training on clips where movement actually happens, and capping each correction. Green ticks = done. The right panel is the one lever still in flight and it's the big one: today we reuse only the backbone of a strong pretrained depth model and train the rest ourselves; borrowing the FULL pretrained model should close the last accuracy gap. That's running now.">
+  <div class="kicker">Where we are</div>
+  <h2>Shipped — and the one big lever left</h2>
   <div class="body" style="align-items:stretch">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;flex:1.25">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;flex:1.2">
       <div class="card">
-        <svg viewBox="0 0 220 64">
-          <path d="M8 46 Q 40 14 72 34 T 136 30 T 208 38" fill="none" stroke="#3E6FD9" stroke-width="3"/>
-          <path d="M8 52 Q 40 20 72 40 T 136 36 T 208 44" fill="none" stroke="#B07D18" stroke-width="3"/>
+        <svg viewBox="0 0 220 60">
+          <path d="M8 44 Q 40 12 72 32 T 136 28 T 208 36" fill="none" stroke="#3E6FD9" stroke-width="3"/>
+          <path d="M8 50 Q 40 18 72 38 T 136 34 T 208 42" fill="none" stroke="#B07D18" stroke-width="3"/>
         </svg>
-        <p style="font-weight:700;font-size:18px;margin-top:8px">Punish flicker, not motion</p>
-        <p class="cap">a loss that finally rewards steadiness</p>
+        <p style="font-weight:700;font-size:17px;margin-top:6px">Punish flicker, not motion <span style="color:var(--goodt)">✓</span></p>
+        <p class="cap">the loss that woke the memory module up</p>
       </div>
       <div class="card">
-        <svg viewBox="0 0 220 64">
-          <g><rect x="8" y="22" width="26" height="26" rx="4" fill="#182230"/><rect x="40" y="22" width="26" height="26" rx="4" fill="#182230"/><rect x="72" y="22" width="26" height="26" rx="4" fill="#1FA491"/><rect x="104" y="22" width="26" height="26" rx="4" fill="#1FA491"/><rect x="136" y="22" width="26" height="26" rx="4" fill="#182230"/><rect x="168" y="22" width="26" height="26" rx="4" fill="#1FA491"/></g>
+        <svg viewBox="0 0 220 60">
+          <g><rect x="8" y="20" width="24" height="24" rx="4" fill="#182230"/><rect x="38" y="20" width="24" height="24" rx="4" fill="#182230"/><rect x="68" y="20" width="24" height="24" rx="4" fill="#1FA491"/><rect x="98" y="20" width="24" height="24" rx="4" fill="#1FA491"/><rect x="128" y="20" width="24" height="24" rx="4" fill="#182230"/><rect x="158" y="20" width="24" height="24" rx="4" fill="#1FA491"/></g>
         </svg>
-        <p style="font-weight:700;font-size:18px;margin-top:8px">Train where movement lives</p>
+        <p style="font-weight:700;font-size:17px;margin-top:6px">Train where movement lives <span style="color:var(--goodt)">✓</span></p>
         <p class="cap">clips chosen by measured motion</p>
       </div>
       <div class="card">
-        <svg viewBox="0 0 220 64">
-          <line x1="20" y1="36" x2="200" y2="36" stroke="rgba(233,237,243,.16)" stroke-width="3"/>
-          <rect x="86" y="24" width="48" height="24" rx="12" fill="#B07D18"/>
-          <text x="110" y="41" text-anchor="middle" class="m num" font-size="13" fill="#0B0F14" font-weight="700">±15%</text>
+        <svg viewBox="0 0 220 60">
+          <line x1="20" y1="34" x2="200" y2="34" stroke="rgba(233,237,243,.16)" stroke-width="3"/>
+          <rect x="86" y="22" width="48" height="24" rx="12" fill="#B07D18"/>
+          <text x="110" y="39" text-anchor="middle" class="m num" font-size="13" fill="#0B0F14" font-weight="700">±15%</text>
         </svg>
-        <p style="font-weight:700;font-size:18px;margin-top:8px">Corrections, capped</p>
-        <p class="cap">halos bounded by construction</p>
+        <p style="font-weight:700;font-size:17px;margin-top:6px">Corrections, capped <span style="color:var(--goodt)">✓</span></p>
+        <p class="cap">no more halos; refinement only helps</p>
       </div>
       <div class="card">
-        <svg viewBox="0 0 220 64">
-          <rect x="26" y="14" width="34" height="44" rx="12" fill="#1FA491"/>
-          <rect x="66" y="10" width="40" height="48" rx="13" fill="#3E6FD9"/>
-          <rect x="132" y="20" width="64" height="30" rx="8" fill="#0B0F14" stroke="#3ED2BC" stroke-width="2"/>
-          <text x="164" y="40" text-anchor="middle" class="m num" font-size="14" fill="#3ED2BC">4.2 m</text>
+        <svg viewBox="0 0 220 60">
+          <rect x="26" y="12" width="34" height="42" rx="12" fill="#1FA491"/>
+          <rect x="66" y="8" width="40" height="46" rx="13" fill="#3E6FD9"/>
+          <rect x="132" y="18" width="64" height="30" rx="8" fill="#0B0F14" stroke="#3ED2BC" stroke-width="2"/>
+          <text x="164" y="38" text-anchor="middle" class="m num" font-size="14" fill="#3ED2BC">4.2 m</text>
         </svg>
-        <p style="font-weight:700;font-size:18px;margin-top:8px">Remember hidden people</p>
-        <p class="cap">depth carried through occlusion — no retraining</p>
+        <p style="font-weight:700;font-size:17px;margin-top:6px">Remember hidden people <span style="color:var(--goodt)">✓</span></p>
+        <p class="cap">depth carried through occlusion, no retraining</p>
       </div>
     </div>
-    <div class="card" style="flex:.75;display:flex;flex-direction:column;justify-content:center;gap:14px;border-color:rgba(245,182,63,.35)">
-      <div class="kicker" style="font-size:11px">the big lever</div>
-      <p style="font-size:20px;font-weight:700;line-height:1.35">Borrow the full pretrained depth prior — not just its backbone.</p>
-      <p class="cap">aimed straight at the near-range gap from Pass 1</p>
+    <div class="card" style="flex:.8;display:flex;flex-direction:column;justify-content:center;gap:12px;border-color:rgba(245,182,63,.45)">
+      <div class="kicker" style="font-size:11px">the big lever · in flight</div>
+      <p style="font-size:20px;font-weight:700;line-height:1.35">Borrow the <span style="color:var(--p3t)">whole</span> pretrained depth model — not just its backbone.</p>
+      <p class="cap">the near-range accuracy gap is the last thing standing; this aims straight at it</p>
     </div>
   </div>
 </section>
 
-<!-- ================= 12 · FUTURE ================= -->
+<!-- ================= 13 · FUTURE ================= -->
 <section class="slide" data-notes="~25s — Next three moves, in order: finish the strong-prior training runs; make identity persistent by propagating people through the video rather than re-finding them; prove everything beyond our own lab's recordings. Then write it up.">
   <div class="kicker">Next</div>
   <h2>Three moves ahead</h2>
@@ -451,7 +502,7 @@ svg .mut{fill:var(--mut)} svg .faint{fill:var(--faint)}
   </div>
 </section>
 
-<!-- ================= 13 · CONCLUSION ================= -->
+<!-- ================= 14 · CONCLUSION ================= -->
 <section class="slide" data-notes="~20s — Land the arc: we set out to reproduce a paper; we ended up diagnosing it, and the diagnosis became our contribution. Play V5 — a person walks behind another and comes out the same colour AND the same depth. That clip is the whole project in five seconds.">
   <div class="kicker">Where we are</div>
   <h2>Reproduce → diagnose → <span class="gradtitle">extend</span></h2>
@@ -459,13 +510,13 @@ svg .mut{fill:var(--mut)} svg .faint{fill:var(--faint)}
     <div class="ph" style="flex:1">
       <span class="id">V5 · VIDEO — THE PAYOFF</span>
       <span class="what">One person walks behind another — and stays the same colour, at the same depth</span>
-      <span class="spec">≈1128×380 · make_sequence_videos.py + StreamingInstanceStabilizer</span>
+      <span class="spec">≈1128×380 · make_sequence_videos.py --track-instances</span>
     </div>
     <div class="cap" style="text-align:center">The diagnosis became the contribution.</div>
   </div>
 </section>
 
-<!-- ================= 14 · THANK YOU ================= -->
+<!-- ================= 15 · THANK YOU ================= -->
 <section class="slide" data-notes="~15s — Thanks + where to look. QR to the repo. Offer the backup slide (press →) if anyone wants the media checklist.">
   <div class="depthfield" style="opacity:.5">
     <div class="band b3 drift" style="animation-duration:21s"></div>
@@ -486,35 +537,35 @@ svg .mut{fill:var(--mut)} svg .faint{fill:var(--faint)}
   </div>
 </section>
 
-<!-- ================= 15 · BACKUP: MEDIA MANIFEST ================= -->
-<section class="slide" data-notes="Backup only — not part of the 8 minutes. The editor's checklist: every placeholder, where it goes, its size, and the exact repo command that produces it.">
+<!-- ================= 16 · BACKUP: MEDIA MANIFEST ================= -->
+<section class="slide" data-notes="Backup only — not part of the 8 minutes. The editor's checklist: every placeholder, where it goes, its size, and the exact repo command that produces it. Note the two demo clips that MUST use --track-instances (V3b, V5) so identities don't flicker.">
   <div class="kicker" style="color:var(--faint)">Backup · not part of the talk</div>
   <h2 style="font-size:32px">Editor's manifest — media to drop in</h2>
-  <div class="body" style="margin-top:16px">
+  <div class="body" style="margin-top:12px">
     <div style="overflow:auto;flex:1;border:1px solid var(--line);border-radius:12px">
-      <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:13.5px">
+      <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:13px">
         <thead><tr style="text-align:left;color:var(--p3t)">
-          <th style="padding:10px 14px;border-bottom:1px solid var(--line2)">ID</th>
-          <th style="padding:10px 14px;border-bottom:1px solid var(--line2)">Slide · position</th>
-          <th style="padding:10px 14px;border-bottom:1px solid var(--line2)">Size</th>
-          <th style="padding:10px 14px;border-bottom:1px solid var(--line2)">Produce with</th>
+          <th style="padding:9px 14px;border-bottom:1px solid var(--line2)">ID</th>
+          <th style="padding:9px 14px;border-bottom:1px solid var(--line2)">Slide · position</th>
+          <th style="padding:9px 14px;border-bottom:1px solid var(--line2)">Size</th>
+          <th style="padding:9px 14px;border-bottom:1px solid var(--line2)">Produce with</th>
         </tr></thead>
         <tbody style="color:var(--mut)">
-          <tr><td style="padding:9px 14px">V1*</td><td style="padding:9px 14px">S1 · full-bleed background (optional)</td><td style="padding:9px 14px">1920×1080</td><td style="padding:9px 14px">make_grid_video.py, muted loop</td></tr>
-          <tr><td style="padding:9px 14px">V2</td><td style="padding:9px 14px">S2 · right half</td><td style="padding:9px 14px">620×460</td><td style="padding:9px 14px">infer_video.py --compare (baseline failing)</td></tr>
-          <tr><td style="padding:9px 14px">I1</td><td style="padding:9px 14px">S3 · middle card</td><td style="padding:9px 14px">300×210</td><td style="padding:9px 14px">visualize_phase3.py error-panel crop</td></tr>
-          <tr><td style="padding:9px 14px">I2</td><td style="padding:9px 14px">S6 · top strip</td><td style="padding:9px 14px">1128×300</td><td style="padding:9px 14px">visualize_hdi.py, 2 scenes × RGB|GT|pred</td></tr>
-          <tr><td style="padding:9px 14px">I3</td><td style="padding:9px 14px">S7 · left half</td><td style="padding:9px 14px">540×430</td><td style="padding:9px 14px">visualize_phase2.py mask grid</td></tr>
-          <tr><td style="padding:9px 14px">V3</td><td style="padding:9px 14px">S7 · right half</td><td style="padding:9px 14px">540×430</td><td style="padding:9px 14px">make_sequence_videos.py --phase 2, tracker OFF</td></tr>
-          <tr><td style="padding:9px 14px">V4</td><td style="padding:9px 14px">S8 · right, upper</td><td style="padding:9px 14px">520×300</td><td style="padding:9px 14px">rings-vs-capped before/after</td></tr>
-          <tr><td style="padding:9px 14px">I4</td><td style="padding:9px 14px">S8 · right, lower</td><td style="padding:9px 14px">520×200</td><td style="padding:9px 14px">ring artifact zoom crop</td></tr>
-          <tr><td style="padding:9px 14px">V5</td><td style="padding:9px 14px">S13 · main area</td><td style="padding:9px 14px">1128×380</td><td style="padding:9px 14px">sequence video + StreamingInstanceStabilizer</td></tr>
-          <tr><td style="padding:9px 14px">QR1</td><td style="padding:9px 14px">S14 · right</td><td style="padding:9px 14px">200×200</td><td style="padding:9px 14px">QR to repo</td></tr>
+          <tr><td style="padding:7px 14px">V2</td><td style="padding:7px 14px">S2 · right half</td><td style="padding:7px 14px">620×460</td><td style="padding:7px 14px">infer_video.py --compare (baseline failing on a group)</td></tr>
+          <tr><td style="padding:7px 14px">I1</td><td style="padding:7px 14px">S3 · middle card</td><td style="padding:7px 14px">300×210</td><td style="padding:7px 14px">visualize_phase3.py error-panel crop</td></tr>
+          <tr><td style="padding:7px 14px"><b style="color:var(--p3t)">I5</b></td><td style="padding:7px 14px"><b>S5 · right — the dataset</b></td><td style="padding:7px 14px">330×220</td><td style="padding:7px 14px">one frame: RGB → masks → IDs → depth layers</td></tr>
+          <tr><td style="padding:7px 14px">I2</td><td style="padding:7px 14px">S7 · left half</td><td style="padding:7px 14px">540×430</td><td style="padding:7px 14px">visualize_hdi.py, 2 scenes × RGB|GT|pred</td></tr>
+          <tr><td style="padding:7px 14px"><b style="color:var(--badt)">V3a</b></td><td style="padding:7px 14px">S8 · left — BEFORE</td><td style="padding:7px 14px">540×360</td><td style="padding:7px 14px">make_sequence_videos.py (no tracker) — flicker</td></tr>
+          <tr><td style="padding:7px 14px"><b style="color:var(--goodt)">V3b</b></td><td style="padding:7px 14px">S8 · right — AFTER</td><td style="padding:7px 14px">540×360</td><td style="padding:7px 14px">infer_video.py <b>--track-instances</b> — stable</td></tr>
+          <tr><td style="padding:7px 14px">V4</td><td style="padding:7px 14px">S9 · right, upper</td><td style="padding:7px 14px">520×300</td><td style="padding:7px 14px">rings-vs-capped before/after (infer_video --compare)</td></tr>
+          <tr><td style="padding:7px 14px">I4</td><td style="padding:7px 14px">S9 · right, lower</td><td style="padding:7px 14px">520×200</td><td style="padding:7px 14px">ring-artifact zoom crop</td></tr>
+          <tr><td style="padding:7px 14px"><b style="color:var(--goodt)">V5</b></td><td style="padding:7px 14px">S14 · main — the payoff</td><td style="padding:7px 14px">1128×380</td><td style="padding:7px 14px">make_sequence_videos.py <b>--track-instances</b></td></tr>
+          <tr><td style="padding:7px 14px">QR1</td><td style="padding:7px 14px">S15 · right</td><td style="padding:7px 14px">200×200</td><td style="padding:7px 14px">QR to repo</td></tr>
         </tbody>
       </table>
     </div>
   </div>
-  <div class="foot-line mono" style="font-size:12px;color:var(--faint)">* optional — the CSS art already carries S1. Swap any <b>video</b> in as &lt;video autoplay muted loop playsinline&gt;.</div>
+  <div class="foot-line mono" style="font-size:12px;color:var(--faint)">Swap any <b>video</b> in as &lt;video autoplay muted loop playsinline&gt;. The two demo clips (V3b, V5) MUST run with <b>--track-instances</b> so colours stay locked.</div>
 </section>
 
 </div></div>
@@ -530,7 +581,7 @@ svg .mut{fill:var(--mut)} svg .faint{fill:var(--faint)}
 <script>
 (function(){
   var slides=[].slice.call(document.querySelectorAll('.slide'));
-  var TALK=14;                       // slides in the 8 minutes; 15 is backup
+  var TALK=15;                       // slides in the 8 minutes; 16 is backup
   var cur=0, t0=null, tick=null;
   var dots=document.getElementById('dots'),
       counter=document.getElementById('counter'),
