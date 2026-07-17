@@ -295,3 +295,45 @@ def test_mask_tracker_falls_back_without_scipy(monkeypatch):
     tr.update([A], [2.0])
     _, _, ids = tr.update([_rect(H, W, 0, W, 0, 11)], [2.0])   # same person, moved
     assert ids == [0]                      # re-associated via greedy fallback
+
+
+# --------------------------------------------------------------------------- #
+# colorize_depth windowing (min_depth): the fix for shallow scenes reading as
+# one flat colour when colorized over the model's wide trained range.
+# --------------------------------------------------------------------------- #
+def _spread(img):
+    """Mean per-channel std over all pixels -- a proxy for colour contrast."""
+    return float(img.reshape(-1, 3).std(axis=0).mean())
+
+
+def test_colorize_tight_window_adds_contrast_for_shallow_scene():
+    d = np.linspace(3.0, 5.0, 400, dtype=np.float32).reshape(20, 20)   # 3-5 m scene
+    wide = colorize_depth(d, max_depth=10.0)                            # trained range
+    tight = colorize_depth(d, max_depth=5.0, min_depth=0.0)            # 0-5 window
+    tighter = colorize_depth(d, max_depth=5.0, min_depth=2.5)          # 2.5-5 window
+    assert _spread(tight) > _spread(wide)                              # more of the map used
+    assert _spread(tighter) > _spread(tight)                          # even more
+
+
+def test_colorize_min_depth_default_is_backward_compatible():
+    d = np.linspace(0.5, 9.5, 400, dtype=np.float32).reshape(20, 20)
+    assert np.array_equal(colorize_depth(d, 10.0), colorize_depth(d, 10.0, min_depth=0.0))
+
+
+def test_colorize_window_clamps_not_blacks_out_but_invalid_stays_black():
+    d = np.array([[1.0, 4.0, 9.0], [0.0, 5.0, 5.5]], np.float32)   # some outside a 2-5 window
+    out = colorize_depth(d, max_depth=5.0, min_depth=2.0)          # far_thresh=None -> clamp
+    assert (out[1, 0] == 0).all()                                  # d==0 invalid -> black
+    assert (out[0, 0] != 0).any()                                  # d=1 (<lo) clamped, not black
+    assert (out[0, 2] != 0).any()                                  # d=9 (>hi) clamped, not black
+
+
+def test_colorize_infer_video_drange_branch():
+    """scripts.infer_video.colorize routes an explicit window through
+    min_depth and never blacks out in-window pixels."""
+    import importlib
+    iv = importlib.import_module("scripts.infer_video")
+    d = np.linspace(3.0, 5.0, 100, dtype=np.float32).reshape(10, 10)
+    flat = iv.colorize(d, mode="metric", max_depth=10.0)
+    windowed = iv.colorize(d, mode="metric", max_depth=10.0, drange=(0.0, 5.0))
+    assert _spread(windowed) > _spread(flat)

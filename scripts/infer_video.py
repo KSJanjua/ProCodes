@@ -16,12 +16,19 @@ the depth panel changes, while the instance panel is identical by
 construction (Phase 2 never reads Phase 1).
 
 This is the generalization check: the model was trained on a single indoor
-RGB-D sensor with metric depth in (0, 10] m, so out-of-domain scenes (outdoor,
-long sightlines) will saturate the metric range -- use
-``--normalize percentile`` to colorize by each frame's own 2-98 percentile
-range instead of the fixed metric range when inspecting such footage. Note
-percentile re-normalizes PER FRAME, which adds its own frame-to-frame colour
-shifts -- avoid it when judging temporal stability.
+RGB-D sensor with metric depth in (0, 10] m. Colorization range matters:
+
+  * default ``--normalize metric`` spends the whole colour map on [0, max_depth]
+    (10 m). A scene much shallower than that (e.g. a 4-5 m tabletop clip) then
+    lands in a narrow colour band and reads as ONE FLAT COLOUR. Fix: pass a
+    tight window, ``--depth-range 0 5`` -- same window every frame, so it's
+    high-contrast AND temporally stable. (This changes only the picture, never
+    the model's metric predictions.)
+  * ``--normalize global`` does the same automatically: it estimates a robust
+    2-98 range over the first ``--global-warmup`` frames, then FREEZES it.
+  * ``--normalize percentile`` re-normalizes PER FRAME -- adaptive but it adds
+    its own frame-to-frame colour shifts, so avoid it when judging temporal
+    stability. Prefer --depth-range / global.
 
 Usage (server, project root):
 
@@ -73,7 +80,15 @@ log = logging.getLogger("scripts.infer_video")
 _FRAME_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}
 
 
-def colorize(depth: np.ndarray, mode: str, max_depth: float) -> np.ndarray:
+def colorize(depth: np.ndarray, mode: str, max_depth: float,
+             drange: Optional[Tuple[float, float]] = None) -> np.ndarray:
+    # Explicit / auto-global fixed window -> full colour range spent on it,
+    # and it's the SAME window every frame (temporally stable, unlike
+    # per-frame percentile). This is the fix for shallow scenes colorized
+    # over the model's wide trained range reading as one flat colour.
+    if drange is not None:
+        lo, hi = drange
+        return colorize_depth(depth, hi, min_depth=lo)   # no far_thresh: clamp, don't black out
     if mode == "metric":
         # far_thresh: beyond the sensor range render black, matching GT panels
         return colorize_depth(depth, max_depth, far_thresh=max_depth)
@@ -174,8 +189,18 @@ def main() -> None:
     ap.add_argument("--video", required=True,
                     help="input video file, or a DIRECTORY of image frames")
     ap.add_argument("--out", required=True, help="output path (extension chosen by codec)")
-    ap.add_argument("--normalize", choices=["metric", "percentile"], default="metric",
-                    help="depth colorization range: fixed metric [0,max_depth] or per-frame percentile")
+    ap.add_argument("--normalize", choices=["metric", "percentile", "global"], default="metric",
+                    help="depth colorization range: 'metric' fixed [0,max_depth]; 'percentile' "
+                         "per-frame 2-98 (adaptive but flickers); 'global' auto -- 2-98 range "
+                         "estimated over the first --global-warmup frames then FROZEN (adaptive "
+                         "AND temporally stable). Overridden by --depth-range if given.")
+    ap.add_argument("--depth-range", nargs=2, type=float, default=None, metavar=("LO", "HI"),
+                    help="colorize over this fixed metric window (metres), e.g. --depth-range 0 5 "
+                         "for a shallow scene. Spends the whole colour map on [LO,HI] and uses the "
+                         "SAME window every frame, so a 4-5 m scene stops reading as one flat "
+                         "colour. Does NOT change the model's predictions, only the visualization.")
+    ap.add_argument("--global-warmup", type=int, default=10,
+                    help="frames used to estimate the frozen range for --normalize global")
     ap.add_argument("--stride", type=int, default=1, help="process every Nth frame")
     ap.add_argument("--max-frames", type=int, default=None)
     ap.add_argument("--fps", type=float, default=30.0,
@@ -259,6 +284,11 @@ def main() -> None:
     log.info("input: %s (%.2f fps, %s frames); output fps %.2f",
              args.video, src_fps, total if total is not None else "?", out_fps)
 
+    explicit_range = tuple(args.depth_range) if args.depth_range else None
+    if explicit_range:
+        log.info("colorizing over the fixed window %.2f-%.2f m (every frame)", *explicit_range)
+    g_lo = g_hi = None   # frozen global range accumulators (--normalize global)
+
     writer = None
     actual_path = None
     idx = written = 0
@@ -272,10 +302,27 @@ def main() -> None:
         pred = predict(bgr)
         panels = [put_label(bgr, "RGB")]
 
+        # Colorization window for THIS frame. Explicit --depth-range wins; else
+        # 'global' widens a robust 2-98 envelope over the warmup frames then
+        # freezes it (same window forever after -> stable); else None (colorize
+        # falls back to metric / per-frame percentile).
+        drange = explicit_range
+        if drange is None and args.normalize == "global" and pred["depth"] is not None:
+            v = pred["depth"][pred["depth"] > 0]
+            if v.size:
+                p2, p98 = (float(x) for x in np.percentile(v, [2, 98]))
+                if g_lo is None or written < args.global_warmup:
+                    g_lo = p2 if g_lo is None else min(g_lo, p2)
+                    g_hi = p98 if g_hi is None else max(g_hi, p98)
+                if written == args.global_warmup - 1:
+                    log.info("global range frozen at %.2f-%.2f m", g_lo, g_hi)
+            if g_lo is not None:
+                drange = (g_lo, max(g_hi, g_lo + 1e-3))
+
         def _depth_panel(dmap, label):
             if dmap.shape != (H, W):
                 dmap = cv2.resize(dmap, (W, H), interpolation=cv2.INTER_LINEAR)
-            return put_label(colorize(dmap, args.normalize, max_depth), label)
+            return put_label(colorize(dmap, args.normalize, max_depth, drange), label)
 
         if pred["depth"] is not None:            # Phase 2 alone has no dense depth
             panels.append(_depth_panel(pred["depth"], main_label))

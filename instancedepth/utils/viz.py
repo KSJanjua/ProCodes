@@ -28,18 +28,29 @@ IMAGENET_STD = np.array((0.229, 0.224, 0.225), np.float32)
 # colorization
 # --------------------------------------------------------------------------- #
 def colorize_depth(depth_m: np.ndarray, max_depth: float = 10.0,
-                   far_thresh: Optional[float] = None) -> np.ndarray:
+                   far_thresh: Optional[float] = None,
+                   min_depth: float = 0.0) -> np.ndarray:
     """(H,W) metric depth -> BGR. Near = warm, far = cool, invalid = black.
+
+    The colormap is stretched over ``[min_depth, max_depth]``: the full colour
+    range is spent on exactly that window. For a shallow scene (say 4-5 m)
+    colorized over the model's trained 0-10 m range, every pixel lands in the
+    lower ~40 % of the map and the frame reads as one flat colour -- pass a
+    tight window (e.g. min_depth=0, max_depth=5) to restore contrast. Values
+    outside the window are clamped to the near/far ends (not blacked out), so
+    structure is never lost.
 
     ``far_thresh``: additionally render depth >= this value black, matching
     how GT looks (the sensor returns 0 beyond its range, so GT is black
     there, while a prediction would otherwise stay dark-blue). Pass the
-    dataset's max_depth for GT-comparable prediction panels."""
+    dataset's max_depth for GT-comparable prediction panels; leave it None for
+    a plain windowed view."""
     d = np.asarray(depth_m, np.float32)
     valid = d > 0
     if far_thresh is not None:
         valid &= d < far_thresh
-    norm = np.clip(d / max_depth, 0.0, 1.0)
+    span = max(max_depth - min_depth, 1e-6)
+    norm = np.clip((d - min_depth) / span, 0.0, 1.0)
     inv = ((1.0 - norm) * 255.0).astype(np.uint8)   # near -> 255 (TURBO's warm end)
     bgr = cv2.applyColorMap(inv, cv2.COLORMAP_TURBO)
     bgr[~valid] = 0

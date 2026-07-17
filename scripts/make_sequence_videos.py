@@ -110,6 +110,11 @@ def main() -> None:
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--fps", type=float, default=15.0)
     ap.add_argument("--include-gt", action="store_true", help="add a GT depth middle panel")
+    ap.add_argument("--depth-range", nargs=2, type=float, default=None, metavar=("LO", "HI"),
+                    help="colorize depth over this fixed metric window (metres), e.g. "
+                         "--depth-range 0 5 for a shallow scene, instead of the full 0-max_depth "
+                         "range (which reads as one flat colour when the scene is much shallower). "
+                         "Applies to both GT and prediction panels; visualization only.")
     ap.add_argument("--instances", choices=["auto", "pred", "gt", "both", "none"], default="auto",
                     help="instance-mask panel source: pred (the instance branch's masks + Dep_i), "
                          "gt (dataset id-map + GT depth layers), both (two panels, side by side -- "
@@ -184,11 +189,17 @@ def main() -> None:
 
             pred = predict(bgr)
             panels = [put_label(bgr, "RGB")]
+            # Fixed colour window: explicit --depth-range, else the full metric
+            # range (GT-comparable). lo/hi and far_thresh chosen so both panels
+            # share one mapping. far_thresh=None under a custom window so
+            # in-window pixels are never blacked out.
+            c_lo, c_hi = (args.depth_range if args.depth_range else (0.0, max_depth))
+            c_far = None if args.depth_range else max_depth
             if args.include_gt:
                 gt = GIDInstanceDepthDataset._load_depth(frame, man["depth_scale_to_m"])
                 if gt.shape != (H, W):
                     gt = cv2.resize(gt, (W, H), interpolation=cv2.INTER_NEAREST)
-                panels.append(put_label(colorize_depth(gt, max_depth, far_thresh=max_depth), "GT depth"))
+                panels.append(put_label(colorize_depth(gt, c_hi, far_thresh=c_far, min_depth=c_lo), "GT depth"))
 
             # Phase 2 predicts instances only -- no dense-depth panel to draw.
             if pred["depth"] is not None:
@@ -196,7 +207,7 @@ def main() -> None:
                 if depth.shape != (H, W):
                     depth = cv2.resize(depth, (W, H), interpolation=cv2.INTER_LINEAR)
                 label = "Phase-3 refined" if args.phase == 3 else "Phase-1 depth"
-                panels.append(put_label(colorize_depth(depth, max_depth, far_thresh=max_depth), label))
+                panels.append(put_label(colorize_depth(depth, c_hi, far_thresh=c_far, min_depth=c_lo), label))
 
             if inst_mode in ("pred", "both"):
                 pm, pd, pids = pred["masks"], pred["mask_depths"], pred.get("mask_ids")
