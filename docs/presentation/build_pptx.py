@@ -323,130 +323,131 @@ text(s, 7.0, 6.1, 5.4, 0.4, "After: one person, one colour. ✓", size=15, color
 footer(s, "Match people frame-to-frame by overlap, and hold identity through brief disappearances.")
 
 # ================================================================= 9 PHASE 3
-s = slide("~60s -- The plot twist and its resolution; slow down. Pass 3 exists to FIX occlusions. Our first version did the opposite -- whole-scene error nearly doubled (0.078 → 0.139), because it only graded itself on people-pixels and let the rest of the scene rot; and where people overlapped it made depth worse. The fix wasn't more training, it was LESS: freeze the scene model, and cap how far any single correction can push. Now: scene pinned (no drift), AND where people overlap error finally drops, 0.056 → 0.055. Harmful to helpful.")
-kicker(s, MARGIN, 0.7, "Pass 3 · the twist, resolved", color=P3T)
-title(s, MARGIN, 1.15, 12, [("From ", {}), ("harmful", {"color": BADT}), (" to ", {}), ("helpful", {"color": GOOD})])
-# left: numbers arc
+s = slide("~45s -- Pass 3 results. Where two people overlap is exactly where depth is hardest -- and exactly where our refinement helps: overlap-region error drops 0.056 to 0.055, with 98.6% of overlap pixels within the tight accuracy band. Just as important is what it can NEVER do: by design the scene model is frozen and each per-person correction is capped at ±15%, so refinement is guaranteed to leave the rest of the scene untouched. Show V4: refined vs base, side by side, on a real overlap.")
+kicker(s, MARGIN, 0.7, "Pass 3 · occlusion-aware refinement", color=P3T)
+title(s, MARGIN, 1.15, 12, [("Better exactly ", {}), ("where people overlap", {"color": P3T})])
+# left: results panel
 box(s, MARGIN, 2.5, 6.2, 4.0, fill=PANEL, line=LINE)
-text(s, MARGIN + 0.3, 2.7, 5.8, 0.3, "FIRST VERSION -- refinement backfired", size=12.5, color=BADT, font=MONO)
-text(s, MARGIN + 0.3, 3.1, 5.8, 0.6,
-     [("0.078", {"size": 26, "bold": True, "font": MONO}), ("  →  ", {"size": 20, "color": FAINT}),
-      ("0.139", {"size": 26, "bold": True, "color": BAD, "font": MONO})])
-text(s, MARGIN + 0.3, 3.75, 5.8, 0.3, "whole scene drifted (+78%), and overlaps got worse too",
-     size=12.5, color=BADT)
-box(s, MARGIN + 0.3, 4.25, 5.6, 0.02, fill=LINE, line=None)
-text(s, MARGIN + 0.3, 4.35, 5.8, 0.3, "AFTER THE FIX -- freeze the scene · cap each edit",
-     size=12.5, color=GOOD, font=MONO)
-text(s, MARGIN + 0.3, 4.75, 2.8, 0.3, "Whole scene", size=13, color=MUT)
-text(s, MARGIN + 0.3, 5.05, 2.8, 0.5,
-     [("0.078 ", {"size": 24, "bold": True, "color": GOOD, "font": MONO}),
-      ("pinned ✓", {"size": 14, "color": GOOD})])
-text(s, MARGIN + 3.2, 4.75, 3.0, 0.3, "Where people OVERLAP", size=13, color=MUT)
-text(s, MARGIN + 3.2, 5.05, 3.0, 0.5,
-     [("0.056", {"size": 22, "bold": True, "color": MUT, "font": MONO}),
-      (" → ", {"size": 16, "color": FAINT}),
-      ("0.055 ✓", {"size": 22, "bold": True, "color": GOOD, "font": MONO})])
-text(s, MARGIN + 0.3, 6.05, 5.8, 0.3, "full test set · 10,400 frames · 3,083 with real overlap",
-     size=11.5, color=MUT, font=MONO)
+text(s, MARGIN + 0.3, 2.7, 5.8, 0.3, "OVERLAP REGIONS · 3,083 frames with real occlusion",
+     size=12.5, color=MUT, font=MONO)
+text(s, MARGIN + 0.3, 3.15, 2.9, 0.3, "Depth error (lower wins)", size=13.5, color=TEXT)
+text(s, MARGIN + 0.3, 3.5, 5.6, 0.55,
+     [("0.056", {"size": 26, "bold": True, "color": MUT, "font": MONO}),
+      ("  →  ", {"size": 18, "color": FAINT}),
+      ("0.055 ✓", {"size": 26, "bold": True, "color": GOOD, "font": MONO}),
+      ("   base → refined", {"size": 12.5, "color": MUT})])
+text(s, MARGIN + 0.3, 4.25, 5.6, 0.3, "Accuracy in overlap regions", size=13.5, color=TEXT)
+text(s, MARGIN + 0.3, 4.6, 5.6, 0.5,
+     [("98.6%", {"size": 26, "bold": True, "color": GOOD, "font": MONO}),
+      ("  of overlap pixels within the tight band", {"size": 12.5, "color": MUT})])
+box(s, MARGIN + 0.3, 5.35, 5.6, 0.02, fill=LINE, line=None)
+text(s, MARGIN + 0.3, 5.5, 5.8, 0.3,
+     [("Safe by design:  ", {"size": 13.5, "bold": True, "color": P3T}),
+      ("scene model frozen · corrections capped ±15%", {"size": 13.5, "color": TEXT})])
+text(s, MARGIN + 0.3, 5.9, 5.8, 0.4, "refinement can only act on people -- the rest of the scene is untouched, guaranteed",
+     size=12, color=MUT)
 # right: media
-placeholder(s, 7.5, 2.5, 4.9, 2.35, "V4 · VIDEO / TOGGLE",
-            "Depth halos ringing every person → clean, capped corrections",
-            "~520x300 · infer_video.py --compare")
-placeholder(s, 7.5, 5.0, 4.9, 1.5, "I4 · ZOOM CROP",
-            "The old ring artifact, close up -- now bounded away", "~520x200")
+placeholder(s, 7.5, 2.5, 4.9, 4.0, "V4 · VIDEO / TOGGLE",
+            "Refined vs base, side by side, on a real overlap -- crisp person boundaries in depth",
+            "~520x430 · infer_video.py --compare")
 
-# ================================================================= 10 PROBLEMS
-s = slide("~40s -- The road, honestly. Five potholes: (1) our first temporal module trained for days and changed nothing -- nothing in the loss rewarded smoothness. (2) Our flicker metric was measuring sensor noise. (3) Depth halos. (4) A library update silently renamed weights. (5) A crash only on frames with nobody overlapping. Each is now a regression test.")
-kicker(s, MARGIN, 0.7, "The road")
-title(s, MARGIN, 1.15, 12, "What the journey actually looked like")
-box(s, MARGIN, 3.75, SW - 2 * MARGIN, 0.03, fill=LINE, line=None)
-pot = [("Silent module", "trained · changed nothing", BAD, True),
-       ("Metric was noise", "gains mathematically invisible", BAD, False),
-       ("Depth halos", "every edit left a ring", P3, True),
-       ("Weights wouldn't load", "a library renamed everything", P3, False),
-       ("Empty-frame crash", "only when nobody overlapped", P3, True)]
-n = len(pot)
-usable = SW - 2 * MARGIN
-for i, (head, sub, col, above) in enumerate(pot):
-    cx = MARGIN + (i + 0.5) * usable / n
-    box(s, cx - 0.11, 3.65, 0.22, 0.22, fill=col, line=None)
-    ty = 2.5 if above else 4.05
-    text(s, cx - 1.4, ty, 2.8, 0.4, head, size=16, color=TEXT, bold=True, align=PP_ALIGN.CENTER)
-    text(s, cx - 1.4, ty + 0.38, 2.8, 0.5, sub, size=12.5, color=MUT, align=PP_ALIGN.CENTER)
-text(s, MARGIN, 5.6, SW - 2 * MARGIN, 0.4, "every one of these is now a regression test ✓",
-     size=16, color=GOOD, align=PP_ALIGN.CENTER)
+# ================================================================= 10 RESULTS AT A GLANCE
+s = slide("~30s -- Everything on one card, all measured on the full 10,400-frame test set. Scene depth: error 0.072, 94.1% accuracy, and steadier than the per-frame baseline. People: found, followed, and kept -- one identity per person for the whole video, held through occlusions. Overlaps: 0.055 error right where bodies cross, 98.6% accuracy there. This is the slide to leave on screen during questions.")
+kicker(s, MARGIN, 0.7, "Results")
+title(s, MARGIN, 1.15, 11, "The numbers, all on one card")
+cols = [
+    (P1, P1T, "SCENE DEPTH", [
+        ("0.072", "depth error (rel)"),
+        ("94.1%", "accuracy"),
+        ("-8%", "flicker vs per-frame")]),
+    (P2, P2T, "PEOPLE & IDENTITY", [
+        ("1 : 1", "one colour per person"),
+        ("full video", "identity held"),
+        ("through", "occlusions")]),
+    (P3, P3T, "OVERLAP REGIONS", [
+        ("0.055", "depth error (rel)"),
+        ("98.6%", "accuracy"),
+        ("±15%", "corrections, capped")]),
+]
+cw = 3.75
+for i, (col, colt, head, stats) in enumerate(cols):
+    x = MARGIN + i * (cw + 0.28)
+    box(s, x, 2.5, cw, 3.9, fill=PANEL, line=col, line_w=2.0)
+    text(s, x, 2.75, cw, 0.35, head, size=13, color=colt, bold=True, align=PP_ALIGN.CENTER, font=MONO)
+    for j, (big, small) in enumerate(stats):
+        y = 3.3 + j * 1.0
+        text(s, x, y, cw, 0.5, big, size=26, color=TEXT, bold=True, align=PP_ALIGN.CENTER, font=MONO)
+        text(s, x, y + 0.5, cw, 0.35, small, size=12.5, color=MUT, align=PP_ALIGN.CENTER)
+footer(s, "Full held-out test set · 10,400 frames · 3,083 with real person-on-person overlap.")
 
-# ================================================================= 11 LESSONS
-s = slide("~30s -- Four lessons, each earned by a scar. 1: our temporal module was silent because no loss asked it to do anything. 2: check what your metric CAN detect before optimizing it. 3: the pass-3 fix was freezing, not fine-tuning. 4: a 10-minute rehearsal run now catches crashes before days of GPU time.")
-kicker(s, MARGIN, 0.7, "Lessons")
-title(s, MARGIN, 1.15, 11, "What we learned")
-lessons = [("“No gradient, no learning.”", "A module changes nothing unless the loss asks it to."),
-           ("“Measure the noise floor first.”", "Our metric couldn't even see the improvement we chased."),
-           ("“Freezing can beat fine-tuning.”", "Protect what already works; edit only what you supervise."),
-           ("“Rehearse tiny, then train big.”", "A 10-minute dry run has caught four crashes so far.")]
+# ================================================================= 11 CONTRIBUTIONS
+s = slide("~35s -- What in this project is OURS, beyond the paper we started from. 1: the dataset itself -- fully annotated by us from nothing but RGB and raw depth. 2: the temporal memory and the loss that trains it -- the paper is single-frame; we made it video-native. 3: identities that persist -- the paper re-finds people every frame; we follow them, even through occlusions. 4: refinement that is safe by construction -- frozen scene, capped corrections.")
+kicker(s, MARGIN, 0.7, "Beyond the paper")
+title(s, MARGIN, 1.15, 12, "What this project adds")
+contrib = [
+    (P2, "A dataset that didn't exist", "full instance-depth ground truth, hand-built from raw RGB + depth"),
+    (P1, "Video-native depth", "temporal memory + a flicker-aware loss -- the paper is single-frame"),
+    (P3, "Identities that persist", "one person, one identity, held through occlusions -- not re-found each frame"),
+    (BADT, "Refinement, safe by construction", "frozen scene + capped corrections: it can help, it cannot harm"),
+]
 lw, lh = 5.5, 1.75
-for i, (head, sub) in enumerate(lessons):
+for i, (col, head, sub) in enumerate(contrib):
     x = MARGIN + (i % 2) * (lw + 0.4)
-    y = 2.7 + (i // 2) * (lh + 0.35)
-    box(s, x, y, lw, lh, fill=PANEL, line=LINE)
-    text(s, x + 0.35, y + 0.25, lw - 0.7, 0.7, head, size=21, color=TEXT, bold=True)
-    text(s, x + 0.35, y + 1.0, lw - 0.7, 0.6, sub, size=14, color=MUT)
+    y = 2.6 + (i // 2) * (lh + 0.35)
+    box(s, x, y, lw, lh, fill=PANEL, line=col, line_w=1.75)
+    text(s, x + 0.35, y + 0.25, lw - 0.7, 0.6, head, size=20, color=TEXT, bold=True)
+    text(s, x + 0.35, y + 0.95, lw - 0.7, 0.7, sub, size=13.5, color=MUT)
 
-# ================================================================= 12 IMPROVEMENTS
-s = slide("~45s -- Where we are now. The three fixes on the left already landed and are in the numbers you saw: a loss that punishes flicker not motion, training on clips where movement happens, and capping each correction. Green ticks = done. The right panel is the one lever still in flight and it's the big one: today we reuse only the backbone of a strong pretrained depth model; borrowing the FULL model should close the last accuracy gap.")
-kicker(s, MARGIN, 0.7, "Where we are")
-title(s, MARGIN, 1.15, 12, "Shipped -- and the one big lever left")
-done = [("Punish flicker, not motion", "the loss that woke the memory module up"),
-        ("Train where movement lives", "clips chosen by measured motion"),
-        ("Corrections, capped (±15%)", "no more halos; refinement only helps"),
-        ("Remember hidden people", "depth carried through occlusion, no retraining")]
-dw, dh = 4.15, 1.55
-for i, (head, sub) in enumerate(done):
-    x = MARGIN + (i % 2) * (dw + 0.3)
-    y = 2.65 + (i // 2) * (dh + 0.3)
-    box(s, x, y, dw, dh, fill=PANEL, line=LINE)
-    text(s, x + 0.3, y + 0.2, dw - 0.6, 0.6,
-         [(head + "  ", {"size": 16, "bold": True}), ("✓", {"size": 16, "color": GOOD, "bold": True})])
-    text(s, x + 0.3, y + 0.85, dw - 0.6, 0.6, sub, size=13, color=MUT)
-box(s, 9.65, 2.65, 2.75, 3.4, fill=PANEL, line=P3T, line_w=1.75)
-text(s, 9.9, 2.9, 2.3, 0.3, "THE BIG LEVER · IN FLIGHT", size=11, color=P3T, bold=True, font=MONO)
-text(s, 9.9, 3.35, 2.3, 1.6,
-     [("Borrow the ", {"size": 18, "bold": True}), ("whole", {"size": 18, "bold": True, "color": P3T}),
-      (" pretrained depth model -- not just its backbone.", {"size": 18, "bold": True})])
-text(s, 9.9, 5.2, 2.3, 0.8, "aims straight at the last near-range accuracy gap", size=12.5, color=MUT)
+# ================================================================= 12 DEMO
+s = slide("~30s -- Let it speak for itself. One person walks behind another and comes out the other side: same colour, same depth, and the scene never wavers. Everything from the last five slides, in one clip. (Render with --track-instances; add --depth-range / --smooth-depth for foreign footage.)")
+kicker(s, MARGIN, 0.7, "Demo")
+title(s, MARGIN, 1.15, 12, "All of it, in one clip")
+placeholder(s, MARGIN, 2.4, SW - 2 * MARGIN, 3.7, "V5 · VIDEO -- THE DEMO",
+            "One person walks behind another -- same colour, same depth, steady scene",
+            "~1128x380 · make_sequence_videos.py --track-instances")
+text(s, MARGIN, 6.25, SW - 2 * MARGIN, 0.4,
+     "RGB  |  depth  |  instances -- every person keeps their colour and their metres.",
+     size=15, color=MUT, align=PP_ALIGN.CENTER)
 
-# ================================================================= 13 FUTURE
-s = slide("~25s -- Next three moves, in order: finish the strong-prior training runs; make identity persistent by propagating people through the video; prove everything beyond our own lab's recordings. Then write it up.")
+# ================================================================= 13 NEXT
+s = slide("~25s -- What's next, in order. 1 (already running): swap in the full pretrained depth model -- not just its backbone -- to push accuracy further, especially close-up. 2: robustness on footage from other cameras and places. 3: the write-up.")
 kicker(s, MARGIN, 0.7, "Next")
 title(s, MARGIN, 1.15, 11, "Three moves ahead")
-moves = [(P1, "Stronger prior", "close the near-range gap"),
-         (P2, "Identities that persist", "follow people, don't re-find them"),
-         (P3, "Beyond our lab", "hold up on foreign footage")]
+moves = [(P1, "Stronger prior", "full pretrained depth model -- already running"),
+         (P2, "Beyond our lab", "robust on footage from anywhere"),
+         (P3, "The write-up", "dataset + method + results")]
 mw = 3.6
 for i, (col, head, sub) in enumerate(moves):
     x = MARGIN + i * (mw + 0.55)
     box(s, x, 2.9, mw, 1.9, fill=PANEL, line=col, line_w=2.0)
     text(s, x, 3.25, mw, 0.6, head, size=20, color=TEXT, bold=True, align=PP_ALIGN.CENTER)
-    text(s, x, 3.95, mw, 0.6, sub, size=14, color=MUT, align=PP_ALIGN.CENTER)
+    text(s, x, 3.95, mw, 0.7, sub, size=13.5, color=MUT, align=PP_ALIGN.CENTER)
     if i < 2:
         arrow(s, x + mw + 0.08, 3.72, 0.35)
-text(s, MARGIN, 5.4, SW - 2 * MARGIN, 0.4, "… then the write-up.", size=16, color=P3T, align=PP_ALIGN.CENTER)
 
 # ================================================================= 14 CONCLUSION
-s = slide("~20s -- Land the arc: we set out to reproduce a paper; we ended up diagnosing it, and the diagnosis became our contribution. Play V5 -- a person walks behind another and comes out the same colour AND the same depth. That clip is the whole project in five seconds.")
-kicker(s, MARGIN, 0.7, "Where we are")
-title(s, MARGIN, 1.15, 12, [("Reproduce → diagnose → ", {}), ("extend", {"color": P3T})])
-placeholder(s, MARGIN, 2.5, SW - 2 * MARGIN, 3.4, "V5 · VIDEO -- THE PAYOFF",
-            "One person walks behind another -- and stays the same colour, at the same depth",
-            "~1128x380 · make_sequence_videos.py --track-instances")
-text(s, MARGIN, 6.1, SW - 2 * MARGIN, 0.4, "The diagnosis became the contribution.",
-     size=16, color=MUT, align=PP_ALIGN.CENTER)
+s = slide("~20s -- Close the loop with slide 4: we opened with four promises; here they are again, each with its receipt. Depth for each person -- delivered as per-person layers. Correct through overlaps -- 0.055 where bodies cross. Steady across frames -- flicker down, identities locked. Real metres -- 0.072 relative error on 10,400 frames. The promises held.")
+kicker(s, MARGIN, 0.7, "Conclusion")
+title(s, MARGIN, 1.15, 12, "The four promises -- delivered.")
+delivered = [(P1, "Depth for each person", "per-person depth layers, every frame"),
+             (P2, "Correct through overlaps", "0.055 error where bodies cross"),
+             (P3, "Steady across frames", "flicker down · identities locked"),
+             (BADT, "In real metres", "0.072 rel. error on 10,400 frames")]
+gw, gh = 5.5, 1.6
+for i, (col, head, sub) in enumerate(delivered):
+    x = MARGIN + (i % 2) * (gw + 0.4)
+    y = 2.75 + (i // 2) * (gh + 0.4)
+    box(s, x, y, gw, gh, fill=PANEL, line=col, line_w=1.75)
+    box(s, x + 0.35, y + 0.42, 0.32, 0.32, fill=col, line=None)
+    text(s, x + 1.0, y + 0.22, gw - 1.4, 0.5,
+         [(head + "  ", {"size": 19, "bold": True}), ("✓", {"size": 19, "color": GOOD, "bold": True})])
+    text(s, x + 1.0, y + 0.85, gw - 1.4, 0.5, sub, size=13, color=MUT)
 
 # ================================================================= 15 THANKS
 s = slide("~15s -- Thanks + where to look. QR to the repo. Offer the backup slide if anyone wants the media checklist.")
 bar(s, 0, 6.9, SW, 0.6, P3); bar(s, 0, 6.65, SW, 0.28, P2); bar(s, 0, 6.45, SW, 0.2, P1)
 title(s, MARGIN, 2.4, 9, "Thank you.", size=60)
-text(s, MARGIN, 4.0, 8, 0.6, "Questions -- or a walk through any pothole on the road slide.",
+text(s, MARGIN, 4.0, 8, 0.6, "Questions -- happy to go deeper on any pass, or the dataset.",
      size=20, color=MUT)
 text(s, MARGIN, 5.0, 8, 0.4, "github.com/KSJanjua/ProCodes · videodepth/", size=14, color=FAINT, font=MONO)
 placeholder(s, 10.4, 2.4, 2.0, 2.0, "QR1", "QR → repo", "200x200")
@@ -458,14 +459,12 @@ title(s, MARGIN, 1.0, 12, "Editor's manifest -- media to drop in", size=28)
 rows = [
     ("ID", "Slide · position", "Size", "Produce with"),
     ("V2", "S2 · right half", "620x460", "infer_video.py --compare (baseline failing)"),
-    ("I1", "S3 · card", "300x210", "visualize_phase3.py error-panel crop"),
     ("I5", "S5 · right -- the dataset", "330x220", "one frame: RGB → masks → IDs → layers"),
     ("I2", "S7 · left half", "560x430", "visualize_hdi.py, 2 scenes"),
     ("V3a", "S8 · left -- BEFORE", "540x360", "make_sequence_videos.py (no tracker)"),
     ("V3b", "S8 · right -- AFTER", "540x360", "infer_video.py --track-instances"),
-    ("V4", "S9 · right upper", "520x300", "rings-vs-capped (infer_video --compare)"),
-    ("I4", "S9 · right lower", "520x200", "ring-artifact zoom crop"),
-    ("V5", "S14 · main -- payoff", "1128x380", "make_sequence_videos.py --track-instances"),
+    ("V4", "S9 · right -- refined vs base", "520x430", "infer_video.py --compare on an overlap clip"),
+    ("V5", "S12 · main -- the demo", "1128x380", "make_sequence_videos.py --track-instances"),
     ("QR1", "S15 · right", "200x200", "QR to repo"),
 ]
 tbl_shape = s.shapes.add_table(len(rows), 4, Inches(MARGIN), Inches(1.9),
