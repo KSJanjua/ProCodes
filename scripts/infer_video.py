@@ -201,6 +201,13 @@ def main() -> None:
                          "colour. Does NOT change the model's predictions, only the visualization.")
     ap.add_argument("--global-warmup", type=int, default=10,
                     help="frames used to estimate the frozen range for --normalize global")
+    ap.add_argument("--smooth-depth", type=float, default=0.0, metavar="STRENGTH",
+                    help="training-free temporal depth smoothing for flickery (out-of-domain) "
+                         "footage, 0=off (default), try 0.85: locks the global depth scale "
+                         "(kills whole-frame 'pumping') and EMA-smooths pixels the RGB says are "
+                         "static, while moving pixels still follow the current prediction (no "
+                         "smearing). Cosmetic stabilizer for demos -- does not change accuracy. "
+                         "See videodepth/models/depth_smoother.py.")
     ap.add_argument("--stride", type=int, default=1, help="process every Nth frame")
     ap.add_argument("--max-frames", type=int, default=None)
     ap.add_argument("--fps", type=float, default=30.0,
@@ -284,6 +291,17 @@ def main() -> None:
     has_instance_source = inst_predict is not None or args.phase in (2, 3)
     show_instances = has_instance_source and not args.no_instances
 
+    # Optional training-free anti-flicker post-processing (one smoother per
+    # depth stream so main/compare each keep their own temporal state).
+    smoother = compare_smoother = None
+    if args.smooth_depth > 0:
+        from videodepth.models.depth_smoother import TemporalDepthSmoother
+        smoother = TemporalDepthSmoother(strength=args.smooth_depth)
+        if compare_predict is not None:
+            compare_smoother = TemporalDepthSmoother(strength=args.smooth_depth)
+        log.info("temporal depth smoothing ON (strength=%.2f): scale lock + "
+                 "motion-gated EMA", args.smooth_depth)
+
     for pr in (predict, compare_predict, inst_predict):   # fresh temporal state for this stream
         if pr is not None and hasattr(pr, "reset"):
             pr.reset()
@@ -309,6 +327,8 @@ def main() -> None:
 
         H, W = bgr.shape[:2]
         pred = predict(bgr)
+        if smoother is not None and pred["depth"] is not None:
+            pred["depth"] = smoother(pred["depth"], bgr)
         panels = [put_label(bgr, "RGB")]
 
         # Colorization window for THIS frame. Explicit --depth-range wins; else
@@ -338,6 +358,8 @@ def main() -> None:
         if compare_predict is not None:
             cdepth = compare_predict(bgr)["depth"]
             if cdepth is not None:
+                if compare_smoother is not None:
+                    cdepth = compare_smoother(cdepth, bgr)
                 panels.append(_depth_panel(cdepth, args.compare_label))
 
         # instances: the model's own (phase 2/3) or the separate Phase-2 model
