@@ -357,45 +357,33 @@ placeholder(s, 7.5, 2.5, 4.9, 4.0, "V4 · VIDEO / TOGGLE",
             "~520x430 · infer_video.py --compare")
 
 # ================================================================= 10 RESULTS AT A GLANCE
-s = slide("~35s -- The full system against the per-frame baseline, same 10,400-frame held-out test set, five measurements. Read it top to bottom: depth got 7% more accurate; accuracy-within-band went up; and the two TEMPORAL rows -- temporal error and flicker -- both dropped, meaning the video is measurably steadier, not just nicer to look at. Bottom row: overlap regions, the hardest pixels, also improved. One system, every number moved the right way. Leave this on screen during questions.")
+s = slide("~35s -- Numbers were per pass; this slide is about BREADTH. Four very different situations from the held-out set -- a crowded group, two people crossing, someone close to the camera, a wide sparse scene -- and the same system handles all of them: clean per-person depth, no special casing per scene. Talk over the tiles, don't read them. If a scene type your audience cares about is missing, swap a tile.")
 kicker(s, MARGIN, 0.7, "Results")
-title(s, MARGIN, 1.15, 12, "Per-frame baseline → full system")
-# column headers
-text(s, 6.1, 2.35, 2.1, 0.35, "BASELINE", size=12, color=P1T, bold=True, font=MONO, align=PP_ALIGN.CENTER)
-text(s, 8.6, 2.35, 2.1, 0.35, "FULL SYSTEM", size=12, color=P3T, bold=True, font=MONO, align=PP_ALIGN.CENTER)
-rows = [
-    ("Depth error (rel)",        "0.078",  "0.072",  "-7%",    False),
-    ("Accuracy (within band)",   "93.8%",  "94.1%",  "+0.3 pt", False),
-    ("Temporal error (TAE)",     "0.0558", "0.0547", "-2%",    True),
-    ("Flicker (pred vs scene)",  "0.94",   "0.92",   "-3%",    True),
-    ("Overlap-region error",     "0.056",  "0.055",  "-1.4%",  False),
+title(s, MARGIN, 1.15, 12, "One system, every kind of scene")
+tiles = [
+    (P2, "Crowded group", "5+ people, heavy overlap"),
+    (P1, "People crossing", "the classic identity killer"),
+    (P3, "Close range", "large scale change, near the lens"),
+    (BADT, "Wide & sparse", "small people, long sightlines"),
 ]
-for i, (lab, base_v, ours_v, delta, temporal) in enumerate(rows):
-    y = 2.8 + i * 0.76
-    box(s, MARGIN, y, 11.5, 0.64, fill=PANEL, line=(P3 if temporal else LINE),
-        line_w=(1.75 if temporal else 1.0))
-    text(s, MARGIN + 0.3, y, 4.6, 0.64,
-         [(lab, {"size": 15.5, "bold": True}),
-          ("   · temporal" if temporal else "", {"size": 11.5, "color": P3T})],
-         anchor=MSO_ANCHOR.MIDDLE)
-    text(s, 6.1, y, 2.1, 0.64, base_v, size=17, color=MUT, font=MONO,
-         align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
-    text(s, 8.05, y, 0.7, 0.64, "→", size=15, color=FAINT,
-         align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
-    text(s, 8.6, y, 2.1, 0.64, ours_v, size=17, color=TEXT, bold=True, font=MONO,
-         align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
-    text(s, 10.75, y, 1.55, 0.64, delta + " ✓", size=13.5, color=GOOD, bold=True,
-         font=MONO, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
-footer(s, "Same held-out test set for every row · 10,400 frames · 3,083 with real person-on-person overlap.")
+tw = 2.78
+for i, (col, head, sub) in enumerate(tiles):
+    x = MARGIN + i * (tw + 0.14)
+    ph = placeholder(s, x, 2.5, tw, 3.3, f"I6{chr(97 + i)}",
+                     head, "RGB over depth · ~260x300")
+    ph.line.color.rgb = col
+    text(s, x, 5.9, tw, 0.35, head, size=14.5, color=TEXT, bold=True, align=PP_ALIGN.CENTER)
+    text(s, x, 6.25, tw, 0.35, sub, size=11.5, color=MUT, align=PP_ALIGN.CENTER)
+footer(s, "All from the held-out test set · same model, same settings -- no per-scene tuning.")
 
 # ================================================================= 11 CONTRIBUTIONS
-s = slide("~35s -- What in this project is OURS, beyond the paper we started from. 1: the dataset itself -- fully annotated by us from nothing but RGB and raw depth. 2: the paper is single-frame; we made depth video-native -- a temporal memory carried across frames, trained by a loss that rewards steadiness without punishing real motion. 3: we brought the Video-Mask2Former idea in without its cost -- the per-frame model's own query embeddings carry each person across the video, zero video training. 4: occlusion-aware pair reasoning -- for every overlapping pair, who is in front and by how much, 98.6% accuracy right where bodies cross.")
+s = slide("~35s -- What in this project is OURS, beyond the paper we started from. 1: the dataset itself -- fully annotated by us from nothing but RGB and raw depth. 2: the paper is single-frame; we made depth video-native -- a temporal memory carried across frames, trained by a loss that rewards steadiness without punishing real motion. 3: training that seeks motion -- instead of sampling clips at random, we sample them where the scene actually moves, so the temporal module learns from the frames where time matters. 4: occlusion-aware pair reasoning -- for every overlapping pair, who is in front and by how much, 98.6% accuracy right where bodies cross.")
 kicker(s, MARGIN, 0.7, "Beyond the paper")
 title(s, MARGIN, 1.15, 12, "What this project adds")
 contrib = [
     (P2, "A dataset that didn't exist", "full instance-depth ground truth, hand-built from raw RGB + depth"),
     (P1, "Depth with a memory", "recurrent temporal state + a loss that rewards steadiness, not stillness -- video-native, not frame-by-frame"),
-    (P3, "Video-Mask2Former, without the cost", "its query-identity idea, realised with zero video training -- the queries themselves carry each person across frames"),
+    (P3, "Training that seeks motion", "clips sampled where the scene actually moves -- the temporal module learns from frames where time matters"),
     (BADT, "Occlusion-aware pair reasoning", "who is in front, and by how much, for every overlapping pair -- 98.6% accuracy where bodies cross"),
 ]
 lw, lh = 5.5, 1.75
@@ -418,10 +406,10 @@ text(s, MARGIN, 6.25, SW - 2 * MARGIN, 0.4,
      size=15, color=MUT, align=PP_ALIGN.CENTER)
 
 # ================================================================= 13 NEXT
-s = slide("~25s -- What's next, in order. 1: push the temporal idea further -- today the memory looks one step back; training on whole clips (the full Video-Mask2Former regime) extends how far consistency reaches. 2: robustness on footage from other cameras and places, so the same steadiness holds anywhere. 3: release our dataset as a benchmark, with the write-up -- there is no public instance-depth video benchmark like it.")
+s = slide("~25s -- What's next, in order. 1: put the occlusion refinement to the test on OTHER occlusion-heavy datasets -- crowded public benchmarks we didn't train on -- and measure whether the overlap gains transfer. 2: robustness on footage from other cameras and places, so the same steadiness holds anywhere. 3: release our dataset as a benchmark, with the write-up -- there is no public instance-depth video benchmark like it.")
 kicker(s, MARGIN, 0.7, "Next")
 title(s, MARGIN, 1.15, 11, "Three moves ahead")
-moves = [(P1, "Longer memory", "clip-level training -- consistency that reaches further back"),
+moves = [(P1, "Occlusion benchmarks", "measure Pass 3 on other occlusion-heavy datasets"),
          (P2, "Any camera, anywhere", "the same steadiness on foreign footage"),
          (P3, "Release the benchmark", "our dataset, public -- plus the write-up")]
 mw = 3.6
@@ -472,6 +460,7 @@ rows = [
     ("V3a", "S8 · left -- BEFORE", "540x360", "make_sequence_videos.py (no tracker)"),
     ("V3b", "S8 · right -- AFTER", "540x360", "infer_video.py --track-instances"),
     ("V4", "S9 · right -- refined vs base", "520x430", "infer_video.py --compare on an overlap clip"),
+    ("I6a-d", "S10 · four tiles -- scene gallery", "4 × 260x300", "stills: crowd / crossing / close / sparse (visualize_*.py)"),
     ("V5", "S12 · main -- the demo", "1128x380", "make_sequence_videos.py --track-instances"),
     ("QR1", "S15 · right", "200x200", "QR to repo"),
 ]
