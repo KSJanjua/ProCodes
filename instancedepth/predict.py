@@ -186,7 +186,7 @@ def build_scene_predictor(
             x = preprocess(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), tuple(cfg.data.image_size), device)
             out = model(x)
             keep = torch.where(out.scores()[0] > inst_score_thresh)[0]
-            masks, deps, ids = [], [], []
+            masks, deps, ids, embeds = [], [], [], []
             for q in keep.tolist():
                 m = (out.mask_logits[0, q].sigmoid() > mask_binarize_thresh).float().cpu().numpy()
                 if m.shape != (H, W):
@@ -196,7 +196,11 @@ def build_scene_predictor(
                     masks.append(m)
                     deps.append(float(out.depth_layers[0, q]))
                     ids.append(q)
-            return dict(depth=None, masks=masks, mask_depths=deps, mask_ids=ids)
+                    # final-decoder-layer query embedding: the Mask2Former-VIS
+                    # identity cue, consumed by videodepth's QueryInstanceTracker
+                    embeds.append(out.query_embeddings[0, q].float().cpu().numpy())
+            return dict(depth=None, masks=masks, mask_depths=deps, mask_ids=ids,
+                        mask_embeds=embeds)
 
         predict.reset = lambda: None
         return predict, cfg.data.max_depth
@@ -205,7 +209,8 @@ def build_scene_predictor(
         base_predict, max_depth = build_depth_predictor(1, config, checkpoint, overrides)
 
         def predict(bgr: np.ndarray) -> dict:
-            return dict(depth=base_predict(bgr), masks=[], mask_depths=[], mask_ids=[])
+            return dict(depth=base_predict(bgr), masks=[], mask_depths=[], mask_ids=[],
+                        mask_embeds=[])
 
         predict.reset = getattr(base_predict, "reset", lambda: None)
         return predict, max_depth
@@ -223,7 +228,7 @@ def build_scene_predictor(
             out = inf.predict(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
             p2 = out["aux"]["p2"]
             keep = torch.where(p2.scores()[0] > inst_score_thresh)[0]
-            masks, deps, ids = [], [], []
+            masks, deps, ids, embeds = [], [], [], []
             for q in keep.tolist():
                 m = (p2.mask_logits[0, q].sigmoid() > mask_binarize_thresh).float().cpu().numpy()
                 if m.shape != (H, W):
@@ -233,7 +238,9 @@ def build_scene_predictor(
                     masks.append(m)
                     deps.append(float(p2.depth_layers[0, q]))
                     ids.append(q)
-            return dict(depth=out["refined"], masks=masks, mask_depths=deps, mask_ids=ids)
+                    embeds.append(p2.query_embeddings[0, q].float().cpu().numpy())
+            return dict(depth=out["refined"], masks=masks, mask_depths=deps, mask_ids=ids,
+                        mask_embeds=embeds)
 
         predict.reset = inf.reset_temporal_state
         return predict, cfg.data.max_depth

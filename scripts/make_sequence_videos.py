@@ -57,7 +57,7 @@ import numpy as np
 from instancedepth.data.gid_dataset import GIDInstanceDepthDataset
 from instancedepth.predict import build_scene_predictor
 from instancedepth.utils.viz import (
-    MaskTracker, colorize_depth, draw_instances_with_depth, open_video_writer, put_label,
+    colorize_depth, draw_instances_with_depth, open_video_writer, put_label,
 )
 
 log = logging.getLogger("scripts.make_sequence_videos")
@@ -168,7 +168,11 @@ def main() -> None:
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    tracker = MaskTracker() if args.track_instances and inst_mode in ("pred", "both") else None
+    if args.track_instances and inst_mode in ("pred", "both"):
+        from videodepth.models.query_tracker import QueryInstanceTracker
+        tracker = QueryInstanceTracker()
+    else:
+        tracker = None
 
     for si, sid in enumerate(seq_ids):
         with open(ann_root / sid / "annotations.json") as f:
@@ -212,7 +216,7 @@ def main() -> None:
             if inst_mode in ("pred", "both"):
                 pm, pd, pids = pred["masks"], pred["mask_depths"], pred.get("mask_ids")
                 if tracker is not None:                      # stabilize identities across frames
-                    pm, pd, pids = tracker.update(pm, pd)
+                    pm, pd, pids = tracker.update(pm, pd, pred.get("mask_embeds") or None)
                 panels.append(put_label(
                     draw_instances_with_depth(bgr, pm, pd, ids=pids,
                                               draw_contour=not args.no_contours),

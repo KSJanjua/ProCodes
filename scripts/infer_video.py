@@ -72,7 +72,7 @@ import numpy as np
 
 from instancedepth.predict import build_scene_predictor
 from instancedepth.utils.viz import (
-    MaskTracker, colorize_depth, draw_instances_with_depth, open_video_writer, put_label,
+    colorize_depth, draw_instances_with_depth, open_video_writer, put_label,
 )
 
 log = logging.getLogger("scripts.infer_video")
@@ -219,8 +219,11 @@ def main() -> None:
     ap.add_argument("--no-contours", action="store_true",
                     help="don't outline instance masks in the overlay panel")
     ap.add_argument("--track-instances", action="store_true",
-                    help="stabilize instance identities/colours across frames with a lightweight "
-                         "IoU tracker (suppresses one-frame flicker, bridges brief dropouts)")
+                    help="persistent instance identities/colours across frames via query-embedding "
+                         "tracking (the Mask2Former-VIS identity concept, MinVIS-style: Hungarian "
+                         "match on decoder query embeddings + mask IoU) -- survives crossings and "
+                         "re-identifies people after occlusions. Falls back to IoU-only matching "
+                         "when the predictor exposes no embeddings.")
     ap.add_argument("--instance-config", default=None,
                     help="Phase-2 config for the instance panel -- lets --phase 1 (holistic, "
                          "predicts no instances) still show predicted instances alongside its depth")
@@ -270,7 +273,11 @@ def main() -> None:
     # [RGB | Phase-1 depth | Phase-2 instances] -- the depth panel is what
     # changes between temporal / non-temporal Phase-1 checkpoints, while the
     # instances (which never read Phase 1) stay identical by construction.
-    tracker = MaskTracker() if args.track_instances else None
+    if args.track_instances:
+        from videodepth.models.query_tracker import QueryInstanceTracker
+        tracker = QueryInstanceTracker()
+    else:
+        tracker = None
     inst_predict = None
     if args.instance_checkpoint:
         log.info("loading a separate Phase-2 model for the instance panel")
@@ -367,7 +374,9 @@ def main() -> None:
             inst = inst_predict(bgr) if inst_predict is not None else pred
             im, idp, iids = inst["masks"], inst["mask_depths"], inst.get("mask_ids")
             if tracker is not None:
-                im, idp, iids = tracker.update(im, idp)
+                # embeddings (when the predictor exposes them) carry identity
+                # through crossings and occlusions; None -> IoU-only fallback
+                im, idp, iids = tracker.update(im, idp, inst.get("mask_embeds") or None)
             # Always append the panel (constant canvas width); overlay when
             # this frame has instances, otherwise the plain frame.
             panel = draw_instances_with_depth(bgr, im, idp, ids=iids,

@@ -134,6 +134,34 @@ python -m videodepth.engine.train_dav2 --evaluate \
     --config videodepth/configs/dav2_full.yaml --checkpoint runs/dav2_full/best.pth
 ```
 
+## 4c. Video-Mask2Former identity, without the video training (`models/query_tracker.py`)
+
+**Concept** (Cheng et al., *Mask2Former for Video Instance Segmentation*): in
+the video model a single query is the same instance in every frame — identity
+is a property of the query. The full video model buys that with clip-level
+attention + video training (heavy, and it would obsolete the trained
+`phase2_run` checkpoint). **MinVIS** (NeurIPS 2022) proved the concept works
+with NO video training: the per-frame model's final decoder query embeddings
+are already temporally consistent, so identity = Hungarian matching of query
+embeddings across frames.
+
+`QueryInstanceTracker` implements that, using the `query_embeddings` the
+Phase-2 contract already exposes (cosine, weighted with mask IoU as a spatial
+tie-break; EMA embedding memory with `max_age=30`). Wired into
+`infer_video.py` / `make_sequence_videos.py` as the `--track-instances`
+tracker (embeds auto-passed by `build_scene_predictor`; IoU-only fallback
+when absent). What it adds over the old mask-IoU tracker:
+
+- **crossings**: identity follows the *appearance embedding*, not the
+  position, so two people passing each other keep their colours;
+- **re-identification**: an occluded person keeps their embedding while
+  unseen and re-matches on return — even many frames later, from a new
+  position, which IoU tracking structurally cannot do.
+
+Zero retraining, works on the existing checkpoints today. The trained
+clip-level Video Mask2Former remains the (expensive) upgrade path if
+embedding matching ever proves insufficient.
+
 ## 5. Run book (training server)
 
 ```bash
