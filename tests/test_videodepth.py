@@ -429,3 +429,73 @@ def test_phase3_video_inferencer_module_imports():
     importlib.import_module("videodepth.models.phase3_video")
     from videodepth.models.phase3_video import Phase3VideoInferencer, is_bounded_relation_head_checkpoint
     assert callable(Phase3VideoInferencer) and callable(is_bounded_relation_head_checkpoint)
+
+
+# --------------------------------------------------------------------------- #
+# Phase-1 dispatch: a temporal Phase-1 (VideoDepthModel) checkpoint must route
+# to VideoDepthInferencer, a bare HolisticDepthModel checkpoint to
+# HDIInferencer -- same auto-detect pattern as the Phase-3 head dispatch.
+# --------------------------------------------------------------------------- #
+def _video_model_keys():
+    from videodepth.models.video_model import VideoDepthModel
+    bank = TemporalStabilizerBank(levels=(0,), feat_channels=8, d_model=8,
+                                  num_blocks=1, downsample=0.5)
+    return list(VideoDepthModel(_DummySpatial(), bank).state_dict())
+
+
+def test_video_depth_checkpoint_detector():
+    from videodepth.models.video_model import is_video_depth_checkpoint
+    vk = _video_model_keys()
+    assert any(k.startswith("spatial.") for k in vk)          # sanity on the fixture
+    assert is_video_depth_checkpoint(vk) is True
+    assert is_video_depth_checkpoint(["backbone.embeddings.x", "decoder.y"]) is False
+    assert is_video_depth_checkpoint([]) is False
+
+
+def test_predict_phase1_detector_in_lockstep_with_videodepth():
+    """instancedepth/predict.py inlines the 'spatial.' marker so the vanilla
+    path never imports videodepth; prove the inlined copy and the canonical
+    videodepth detector agree, and that the marker is present in the source."""
+    import inspect
+    import instancedepth.predict as predict_mod
+    from videodepth.models.video_model import is_video_depth_checkpoint
+
+    src = inspect.getsource(predict_mod.build_depth_predictor)
+    assert 'startswith("spatial.")' in src, (
+        "predict.py's inlined phase-1 detector no longer matches the marker "
+        "is_video_depth_checkpoint uses -- update both together.")
+    inlined = lambda keys: any(k.startswith("spatial.") for k in keys)
+    for keys in (_video_model_keys(), ["backbone.x", "decoder.y"], []):
+        assert inlined(keys) == is_video_depth_checkpoint(keys)
+
+
+def test_build_depth_predictor_phase1_dispatches_by_checkpoint(tmp_path, monkeypatch):
+    from instancedepth.predict import build_depth_predictor
+
+    calls = []
+
+    class _FakeVideoInf:
+        def __init__(self, cfg, ckpt):
+            calls.append("video")
+            self.reset_temporal_state = lambda: None
+            self.max_depth = 10.0
+            self.predict = lambda rgb: None
+
+    class _FakeHDIInf:
+        def __init__(self, cfg, ckpt):
+            calls.append("hdi")
+            self.reset_temporal_state = lambda: None
+            self.predict = lambda rgb: None
+
+    monkeypatch.setattr("videodepth.models.video_model.VideoDepthInferencer", _FakeVideoInf)
+    monkeypatch.setattr("instancedepth.models.hdi.inference.HDIInferencer", _FakeHDIInf)
+
+    video_ckpt = tmp_path / "video.pth"
+    torch.save({"model": {k: torch.zeros(1) for k in _video_model_keys()}}, video_ckpt)
+    plain_ckpt = tmp_path / "plain.pth"
+    torch.save({"model": {"backbone.x": torch.zeros(1), "decoder.y": torch.zeros(1)}}, plain_ckpt)
+
+    p1, md1 = build_depth_predictor(1, "videodepth/configs/video_temporal_dav2.yaml", str(video_ckpt))
+    p2, md2 = build_depth_predictor(1, "instancedepth/configs/hdi_dav2.yaml", str(plain_ckpt))
+    assert calls == ["video", "hdi"]
+    assert md1 == 10.0 and md2 > 0                      # max_depth surfaced from each path

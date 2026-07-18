@@ -72,6 +72,37 @@ def build_depth_predictor(
     """
     overrides = overrides or []
     if phase == 1:
+        import torch
+
+        # Route by checkpoint content, like _build_phase3_inferencer below: a
+        # temporal Phase-1 checkpoint (videodepth VideoDepthModel: spatial
+        # model nested under 'spatial.', stabilizer under 'temporal.') cannot
+        # load into the bare HolisticDepthModel, and vice versa. Inlined key
+        # check (marker 'spatial.') so the vanilla path never imports
+        # videodepth; kept in lockstep with
+        # videodepth.models.video_model.is_video_depth_checkpoint (test-enforced).
+        ckpt = torch.load(str(checkpoint), map_location="cpu", weights_only=False)
+        keys = ckpt.get("model", ckpt).keys()
+        is_video = any(k.startswith("spatial.") for k in keys)
+        del ckpt   # peek only; the inferencer reloads from disk itself
+
+        if is_video:
+            log.info("Checkpoint '%s' looks like a temporal Phase-1 (VideoDepthModel) "
+                     "checkpoint; using VideoDepthInferencer. Pass the matching "
+                     "videodepth config (e.g. videodepth/configs/video_temporal_dav2.yaml).",
+                     checkpoint)
+            from videodepth.configs.config import VideoConfig
+            from videodepth.models.video_model import VideoDepthInferencer
+
+            vcfg = VideoConfig.from_yaml_with_overrides(config, overrides)
+            vinf = VideoDepthInferencer(vcfg, checkpoint)
+
+            def predict(bgr: np.ndarray) -> np.ndarray:
+                return vinf.predict(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
+
+            predict.reset = vinf.reset_temporal_state
+            return predict, vinf.max_depth
+
         from instancedepth.configs.config import HDIConfig
         from instancedepth.models.hdi.inference import HDIInferencer
 
