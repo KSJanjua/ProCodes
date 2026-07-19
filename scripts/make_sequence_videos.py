@@ -139,6 +139,10 @@ def main() -> None:
                     help="resize the final stacked canvas by this factor before writing "
                          "(e.g. 0.5 halves file size; also helps picky encoders with very wide frames)")
     ap.add_argument("--limit-seq", type=int, default=None, help="only the first N sequences")
+    ap.add_argument("--seq", nargs="+", default=None, metavar="ID",
+                    help="render only these sequences: exact ids from <split>.txt, or unique "
+                         "substrings of them (e.g. --seq 20260120_094456). Fails loudly if a "
+                         "pattern matches nothing. Combines with --limit-seq (filter first).")
     ap.add_argument("--stride", type=int, default=1, help="use every Nth frame")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
@@ -168,6 +172,17 @@ def main() -> None:
 
     ann_root = Path(args.annotations_root)
     seq_ids = [s for s in (ann_root / f"{args.split}.txt").read_text().splitlines() if s.strip()]
+    if args.seq:
+        picked = []
+        for pat in args.seq:
+            hits = [s for s in seq_ids if s == pat] or [s for s in seq_ids if pat in s]
+            if not hits:
+                raise SystemExit(
+                    f"--seq '{pat}' matches no sequence in {args.split}.txt "
+                    f"(available e.g.: {seq_ids[:3]} ... {len(seq_ids)} total)")
+            picked.extend(h for h in hits if h not in picked)
+        log.info("--seq filter: %d/%d sequences selected: %s", len(picked), len(seq_ids), picked)
+        seq_ids = picked
     if args.limit_seq:
         seq_ids = seq_ids[: args.limit_seq]
 
