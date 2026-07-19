@@ -115,6 +115,11 @@ def main() -> None:
                          "--depth-range 0 5 for a shallow scene, instead of the full 0-max_depth "
                          "range (which reads as one flat colour when the scene is much shallower). "
                          "Applies to both GT and prediction panels; visualization only.")
+    ap.add_argument("--far-black", type=float, default=None, metavar="METRES",
+                    help="render depth >= this many metres BLACK in both GT and prediction "
+                         "panels (matching how GT looks beyond the sensor range). Default: "
+                         "max_depth when no --depth-range is given, disabled with one -- pass "
+                         "e.g. --far-black 10 to force it in either mode.")
     ap.add_argument("--instances", choices=["auto", "pred", "gt", "both", "none"], default="auto",
                     help="instance-mask panel source: pred (the instance branch's masks + Dep_i), "
                          "gt (dataset id-map + GT depth layers), both (two panels, side by side -- "
@@ -195,10 +200,12 @@ def main() -> None:
             panels = [put_label(bgr, "RGB")]
             # Fixed colour window: explicit --depth-range, else the full metric
             # range (GT-comparable). lo/hi and far_thresh chosen so both panels
-            # share one mapping. far_thresh=None under a custom window so
-            # in-window pixels are never blacked out.
+            # share one mapping. Default far behaviour: black beyond max_depth
+            # (GT-comparable) unless a custom window is given (clamp, don't
+            # black); --far-black overrides the threshold in either mode.
             c_lo, c_hi = (args.depth_range if args.depth_range else (0.0, max_depth))
-            c_far = None if args.depth_range else max_depth
+            c_far = args.far_black if args.far_black is not None else \
+                (None if args.depth_range else max_depth)
             if args.include_gt:
                 gt = GIDInstanceDepthDataset._load_depth(frame, man["depth_scale_to_m"])
                 if gt.shape != (H, W):
