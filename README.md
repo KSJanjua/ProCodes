@@ -103,6 +103,21 @@ python -m scripts.eval_vda_baseline \
     --hdi-config instancedepth/configs/hdi_dav2.yaml --split test
 ```
 
+## Significance testing
+
+Per-sequence Phase-3 occlusion abs_rel + a paired test across sequences (the
+independent unit; frames within a sequence are correlated). Use to check
+whether a base-vs-refined (G2) or vanilla-vs-bounded-head (G3) improvement is
+beyond noise. The head is auto-detected from the checkpoint.
+
+```bash
+python -m scripts.eval_phase3_per_sequence --config videodepth/configs/phase3_dav2_p2run.yaml \
+    --checkpoint runs/phase3_video_dav2/best.pth --run-name phase3_video_dav2
+python -m scripts.paired_significance within  --file results/phase3_video_dav2_per_sequence.json
+python -m scripts.paired_significance between --file-a results/phase3_relation_dav2_per_sequence.json \
+                                              --file-b results/phase3_video_dav2_per_sequence.json
+```
+
 ## Qualitative evaluation
 
 ```bash
