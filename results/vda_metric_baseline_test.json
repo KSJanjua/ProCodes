@@ -1,0 +1,25 @@
+{
+  "model": "video_depth_anything_metric_vitl",
+  "eval_mode": "metric (as-is)",
+  "checkpoint": "/home/work/intern_storage/Ayush/weights/metric_video_depth_anything_vitl.pth",
+  "hdi_config": "/home/work/intern_storage/Ayush/InstanceDepthFinal/instancedepth/configs/hdi_dav2.yaml",
+  "split": "test",
+  "image_size": [728, 1288],
+  "input_size": 518,
+  "note": "Off-the-shelf metric VDA, no scale alignment: abs_rel/sigma reflect a global scale mismatch to this sensor domain, NOT depth-shape error. Re-run with --median-align for a fair comparison anchor before using in a results table.",
+  "metrics": {
+    "abs_rel": 2.1998389992003258,
+    "rms": 11.843236266397513,
+    "rms_log": 1.0320526103789989,
+    "log10": 0.430821023957374,
+    "sigma1": 0.00870410658574154,
+    "sigma2": 0.07973032277040158,
+    "sigma3": 0.32914810298982294,
+    "temporal_alignment_error": 0.1349190983168953,
+    "gt_temporal_delta": 0.06074960359132319,
+    "pred_temporal_delta": 0.14424129154932017,
+    "flicker_ratio": 2.3743577409930956,
+    "num_frames": 10400,
+    "num_sequences": 61
+  }
+}

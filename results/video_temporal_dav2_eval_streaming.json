@@ -1,0 +1,23 @@
+{
+  "run_name": "video_temporal_dav2",
+  "phase": 1,
+  "backbone": "Depth-Anything-V2 encoder (DINOv2 ViT-L/14)",
+  "temporal_enabled": true,
+  "eval_mode": "streaming (sequence-ordered, full test split)",
+  "split": "test",
+  "spatial_base": "runs/hdi_dav2/best.pth (zero-init temporal stabilizer = no-op at start; gain is attributable to temporal training)",
+  "metrics": {
+    "abs_rel": 0.07242363381772661,
+    "rms": 0.3738590669961503,
+    "rms_log": 0.10221702882500652,
+    "log10": 0.030174030177429534,
+    "sigma1": 0.9412662762274536,
+    "sigma2": 0.9832467681398759,
+    "sigma3": 0.9960529677340617,
+    "temporal_alignment_error": 0.05469139476992865,
+    "gt_temporal_delta": 0.06074960357697818,
+    "pred_temporal_delta": 0.055738537966958594,
+    "flicker_ratio": 0.9175127850230352,
+    "num_frames": 10400
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "run_name": "hdi_dav2",
+  "phase": 1,
+  "backbone": "Depth-Anything-V2 encoder (DINOv2 ViT-L/14)",
+  "temporal_enabled": false,
+  "eval_mode": "streaming (sequence-ordered, full test split)",
+  "split": "test",
+  "metrics": {
+    "abs_rel": 0.07779355555647412,
+    "rms": 0.38045199371587773,
+    "rms_log": 0.10634856461260754,
+    "log10": 0.031839446025014,
+    "sigma1": 0.9383347260092314,
+    "sigma2": 0.9821327305499178,
+    "sigma3": 0.9956305008266981,
+    "temporal_alignment_error": 0.05584521944456171,
+    "gt_temporal_delta": 0.06074960359132319,
+    "pred_temporal_delta": 0.05740184001934454,
+    "num_frames": 10400
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "run_name": "phase3_video_dav2",
+  "phase": 3,
+  "eval_mode": "occlusion-aware refinement, frozen Phase-1 base + holistic anti-forgetting, full test split",
+  "split": "test",
+  "based_on": {"phase1_checkpoint": "runs/hdi_dav2/best.pth", "phase2_checkpoint": "runs/phase2_run/best.pth"},
+  "note": "Corrected frozen-base run: base depth restored to abs_rel ~0.078 (cf. corrupted-base phase3_current/phase3_dav2 at 0.138, which must not be cited). Refinement improves the occlusion slice (occ abs_rel 0.0592 -> 0.0554) while leaving overall depth unchanged.",
+  "overall_refined": {
+    "abs_rel": 0.07816777045784805,
+    "rms": 0.38327587993672263,
+    "rms_log": 0.10769710272837144,
+    "log10": 0.031984204297365905,
+    "sigma1": 0.937717460252058,
+    "sigma2": 0.9817735720626437,
+    "sigma3": 0.9954346720988934,
+    "num_frames": 10400
+  },
+  "overall_base": {
+    "abs_rel": 0.07819607984776107,
+    "rms": 0.3832718116775728,
+    "rms_log": 0.10770149448958154,
+    "log10": 0.03198254187116758,
+    "sigma1": 0.9376950496277557,
+    "sigma2": 0.9817715499979945,
+    "sigma3": 0.9954344887401049,
+    "num_frames": 10400
+  },
+  "occ_refined": {
+    "abs_rel": 0.05538671756809094,
+    "rms": 0.20285466620278675,
+    "rms_log": 0.08319019203980828,
+    "log10": 0.023753229467946814,
+    "sigma1": 0.9862286621125302,
+    "sigma2": 0.9957879502356458,
+    "sigma3": 0.9982806130968206,
+    "num_frames": 3083
+  },
+  "occ_base": {
+    "abs_rel": 0.05920940450241803,
+    "rms": 0.20377878034913305,
+    "rms_log": 0.08378982840470203,
+    "log10": 0.023865485398936806,
+    "sigma1": 0.9858798818506284,
+    "sigma2": 0.9957592880961728,
+    "sigma3": 0.9982812240492629,
+    "num_frames": 3083
+  }
+}
