@@ -42,9 +42,7 @@ log = logging.getLogger("instancedepth.engine.train_phase2")
 # Mask2FormerForUniversalSegmentation's module tree, per HF's
 # Mask2FormerModel naming convention (pixel_level_module wraps the
 # backbone encoder + the pixel decoder; transformer_module is the
-# masked-attention transformer decoder). **Expected, not yet confirmed by
-# execution** -- scripts/verify_mask2former_api.py's output should be
-# cross-checked against this; if wrong, the backbone LR multiplier
+# masked-attention transformer decoder). If wrong, the backbone LR multiplier
 # (optim.backbone_lr_mult) silently applies to zero parameters instead of
 # the actual backbone, which the sanity log below is meant to catch.
 _BACKBONE_NAME_SUBSTRING = "pixel_level_module.encoder"
@@ -62,8 +60,7 @@ def build_phase2_optimizer(model: torch.nn.Module, cfg) -> torch.optim.Optimizer
     log.info(
         "Phase 2 param groups: backbone (%s) = %d params (%.1fM), other = %d params (%.1fM). "
         "If 'backbone' looks like 0 or the wrong order of magnitude, "
-        "_BACKBONE_NAME_SUBSTRING in train_phase2.py needs updating -- "
-        "check scripts/verify_mask2former_api.py's output.",
+        "_BACKBONE_NAME_SUBSTRING in train_phase2.py needs updating.",
         _BACKBONE_NAME_SUBSTRING, len(backbone_params), n_backbone / 1e6, len(other_params), n_other / 1e6,
     )
 

@@ -24,16 +24,8 @@ repository map.
 
 | Doc | What it covers |
 |---|---|
-| **[AUDIT_2026.md](docs/AUDIT_2026.md)** | **Full 3-phase audit: evidence-backed root causes + ranked fixes** |
+| **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** | **The whole project in ten diagrams — start here** |
 | **[videodepth/docs/DESIGN.md](videodepth/docs/DESIGN.md)** | **`videodepth/`: temporal consistency (TGM) + video-aware occlusion handling — the beyond-the-paper extension package** |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | How everything flows (diagrams) |
-| [PHASE3_DESIGN.md](docs/PHASE3_DESIGN.md) | Phase 3 blueprint, Eq. 8–12 |
-| [PHASE3_DIAGNOSIS.md](docs/PHASE3_DIAGNOSIS.md) | Defects D1–D5 found and fixed |
-| [TEMPORAL_DESIGN.md](docs/TEMPORAL_DESIGN.md) | FlashDepth temporal integration |
-| [FLASHDEPTH_ANALYSIS.md](docs/FLASHDEPTH_ANALYSIS.md) | What was adopted vs rejected |
-| [IMPROVEMENTS.md](docs/IMPROVEMENTS.md) | Results analysis + loss audit |
-| [presentation (.pptx)](docs/presentation/instancedepth-journey.pptx) | 8-minute research-journey slide deck — **editable PowerPoint** (16 slides + speaker notes; regenerate with `python docs/presentation/build_pptx.py`) |
-| [presentation (.html)](docs/presentation/instancedepth-journey.html) | Same deck as a self-contained browser slideshow (`F` fullscreen, `N` notes, `T` timer) |
 
 ## Repository layout
 
@@ -51,10 +43,10 @@ instancedepth/
   engine/           Phase-agnostic Trainer + per-phase train_/evaluate_ entry points
   utils/            Metrics, camera/disparity, checkpointing, seeding, visualization
   predict.py        Unified depth-predictor factory for the video/viz tools
-docs/               Phase 3 design blueprint + diagnosis
-scripts/            Runnable tools (visualization, video generation, pipelines, diagnostics)
+docs/               Architecture diagrams (ARCHITECTURE.md)
+scripts/            Runnable tools (visualization, video generation, pipelines)
 tests/              Unit / regression tests (synthetic tensors; no weights needed)
-results/            Recorded eval JSONs + analysis (runs/ is gitignored)
+results/            Recorded eval JSONs (runs/ is gitignored)
 ```
 
 ## Setup
@@ -93,8 +85,8 @@ python -m instancedepth.engine.evaluate_phase3 --config instancedepth/configs/ph
 Config profiles: `*.yaml` is the paper-faithful baseline; `*_enhanced.yaml`
 enables opt-in, flagged deviations; `*_dav2.yaml` uses the Depth-Anything-V2
 encoder; `phase3_current.yaml` runs Phase 3 on pre-existing checkpoints.
-`scripts/run_dav2_pipeline.sh` and `scripts/run_all_pipelines.sh` chain full
-train+eval sequences for unattended runs.
+`scripts/run_full_pipeline.sh` (baseline) and `scripts/run_dav2_pipeline.sh`
+(DAv2 ablation) chain full train+eval sequences for unattended runs.
 
 ## Qualitative evaluation
 
@@ -127,6 +119,6 @@ Tests run on synthetic tensors and require no pretrained weights.
   single calibrated RGB-D sensor provides true metric ground truth.
 - **Box-IoU occlusion pairing**: GT instance masks are modal and disjoint, so
   mask IoU is structurally ~0 even under occlusion — overlap is detected via
-  bounding boxes (`docs/PHASE3_DIAGNOSIS.md`).
+  bounding boxes.
 - **Visible-only supervision**: a single sensor has no ground truth for hidden
   pixels, so Phase 3's `L_obj` is masked to each instance's visible surface.

@@ -100,17 +100,17 @@ def composite_refined_depth(
     refinement is a multiplicative correction ratio (2E) on the base depth.
     So compositing applies the upsampled RATIO to the FULL-RESOLUTION base
     depth inside each instance's mask, instead of pasting the low-resolution
-    ROI depth itself (defect D1, docs/PHASE3_DIAGNOSIS.md). Properties:
+    ROI depth itself. Properties:
 
       * E = 0.5 everywhere  ->  refined == base EXACTLY (true identity);
       * the base map's fine within-person geometry is preserved and merely
         modulated, never replaced by a 28x28 blur.
 
     Each unique instance is written ONCE: all its pair appearances are
-    aggregated into one mean ratio field (defect D2), and cross-instance
+    aggregated into one mean ratio field, and cross-instance
     contention is arbitrated by per-instance scalar LAYER depth --
     nearest-layer-wins, mirroring data_engine/annotate.py::_flatten_id_map
-    (defect D3) -- not by per-pixel value comparison.
+    -- not by per-pixel value comparison.
 
     ratio_mode="scalar" collapses each instance's ratio to its single
     masked-mean value: maximal within-person coherence, all remaining depth

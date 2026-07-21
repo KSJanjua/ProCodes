@@ -5,8 +5,7 @@ Skipped by default -- resolving the checkpoint used to probe
 indefinitely (no timeout) behind a blocking proxy, as observed on the
 Backend.AI server. This now **only** runs if you explicitly point it at a
 local, manually-downloaded snapshot via the ``PHASE2_CHECKPOINT_DIR`` env
-var (see ``scripts/verify_mask2former_api.py``'s module docstring for the
-download commands) -- never attempts a network call on its own.
+var -- never attempts a network call on its own.
 
 Run (after downloading + transferring the checkpoint, mirroring how the
 DINOv2 `.safetensors` file was handled):

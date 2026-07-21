@@ -1,6 +1,6 @@
 """Configuration for Phase 3 (Occlusion-Aware Depth Refinement).
 
-Design source of truth: ``docs/PHASE3_DESIGN.md``. Same dataclass + ``from_yaml``
+Same dataclass + ``from_yaml``
 / ``from_dict`` / dotlist-override pattern as Phase 1 (``configs/config.py``)
 and Phase 2 (``configs/phase2_config.py``); reuses their ``_coerce`` /
 ``_set_dotted`` helpers rather than duplicating them.
@@ -85,7 +85,7 @@ class Phase3HeadConfig:
                                            # boundaries want the finer grid)
     roi_sampling_ratio: int = 2            # torchvision roi_align sampling_ratio
     refine_granularity: str = "dense"      # "dense" (Reading D, primary) | "scalar" (Reading H)
-                                           # -- user-approved dense-primary (see docs/PHASE3_DESIGN.md)
+                                           # -- user-approved dense-primary
     composite_feather_px: int = 0          # soft-blend width (px) at instance-mask boundaries when
                                            # compositing: 0 = hard edge (faithful default). A hard
                                            # ratio!=1 edge shows as a visible ring/outline around
@@ -98,7 +98,7 @@ class Phase3HeadConfig:
                                            # ratio per instance (maximal within-person coherence;
                                            # all remaining variation comes from base geometry).
                                            # Compositing is not paper-specified -- see
-                                           # relation_head.composite_refined_depth + PHASE3_DIAGNOSIS.md.
+                                           # relation_head.composite_refined_depth.
     hidden_dim: int = 256                  # Phi_o working width [Reasonable Assumption]
     num_conv: int = 3                      # 1x1 conv layers in Phi_o [Reasonable Assumption]
     use_multiscale_feat: bool = False      # False: F_obj = F_2 only (faithful default);
@@ -191,8 +191,8 @@ class Phase3Config:
     # The paper (Sec. 4.3) fine-tunes it at LR 1e-6. On this single-sensor
     # dataset that is a NET LOSS: Phase 3 only supervises ROI (instance)
     # pixels, so the whole-frame Phase-1 depth drifts catastrophically
-    # (measured: abs_rel 0.078 -> 0.139; results/phase3_current_eval.json,
-    # docs/AUDIT_2026.md). Freezing Phase 1 pins the dense base at Phase-1
+    # (measured: abs_rel 0.078 -> 0.139; results/phase3_current_eval.json)
+    # Freezing Phase 1 pins the dense base at Phase-1
     # quality, so the refinement head can only ever help -- Phase 3 becomes
     # non-degrading by construction. Default True (the robust choice for this
     # data); set False to reproduce the paper's joint fine-tune verbatim.

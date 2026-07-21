@@ -2,7 +2,7 @@
 temporal stabilizer, on motion-weighted clips, with the temporal loss the
 first attempt was missing.
 
-The three root causes of the earlier null result (docs/AUDIT_2026.md §1.1) and
+The three root causes of the earlier null result and
 their fixes here:
 
   1. **No temporal loss** -> ``TemporalGradientMatchingLoss`` (VDA's loss

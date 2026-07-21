@@ -71,7 +71,7 @@ class Phase3VideoInferencer:
     ``videodepth.engine.train_phase3_video`` loads into its own head instead
     of the paper's MLP Φo -- the two have different state-dict keys/shapes
     (see ``is_bounded_relation_head_checkpoint``), so using the wrong one
-    raises on load (docs/AUDIT_2026.md: this exact failure hit
+    raises on load (this exact failure hit
     ``scripts/infer_video.py`` before this class existed).
 
     ``max_corr`` is not shape-relevant (only bounds the forward correction),

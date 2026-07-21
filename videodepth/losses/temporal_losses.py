@@ -3,7 +3,7 @@ never had.
 
 The paper (Liang et al., ICCV 2025) is *entirely per-frame*: it enforces
 geometric consistency **across instances within a frame**, never **across
-frames**. Its ``docs/AUDIT_2026.md`` diagnosis of this repo showed the bolted-on
+frames**. A diagnosis of this repo showed the bolted-on
 ConvGRU temporal module was inert precisely because **no loss ever rewarded
 temporal smoothness** — the recurrence had state but no gradient telling it to
 reduce flicker.

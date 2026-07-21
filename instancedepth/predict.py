@@ -26,7 +26,7 @@ def _build_phase3_inferencer(cfg, checkpoint: str):
     videodepth package's bounded pair-attention head
     (``videodepth/models/occlusion.py``) have different state-dict keys and
     shapes, so loading a checkpoint trained with one into a model built with
-    the other raises immediately (docs/AUDIT_2026.md). Peek the checkpoint's
+    the other raises immediately. Peek the checkpoint's
     own keys and pick the matching class -- the same detect-from-file-and-log
     pattern already used for the DAv2 encoder checkpoint in
     ``models/backbone/dinov2_wrapper.py`` -- so callers (and this module)

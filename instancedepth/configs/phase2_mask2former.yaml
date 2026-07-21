@@ -9,7 +9,7 @@ seed: 2026
 model:
   checkpoint: "facebook/mask2former-swin-large-coco-instance"
   checkpoint_dir: "/home/work/intern_storage/Ayush/weights/mask2former-swin-large-coco-instance"
-                          # local snapshot, verified loadable via scripts/verify_mask2former_api.py
+                          # local snapshot, verified loadable
                           # on 2026-07-09. Preferred over any network call; same pattern as the DINOv2
                           # checkpoint. Set back to null only if you move/delete the folder.
   allow_hub_download: false   # set true only if this machine has real (non-proxied) Hub access

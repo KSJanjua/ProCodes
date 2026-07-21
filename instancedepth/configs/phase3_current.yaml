@@ -14,7 +14,7 @@ run_name: "phase3_current"
 run_root: "runs"
 seed: 2026
 
-freeze_phase1: true   # freeze Phase 1: pins dense base at 0.078 abs_rel instead of drifting to 0.139 (docs/AUDIT_2026.md)
+freeze_phase1: true   # freeze Phase 1: pins dense base at 0.078 abs_rel instead of drifting to 0.139
 phase1_config: "instancedepth/configs/hdi_enhanced.yaml"
 phase2_config: "instancedepth/configs/phase2_mask2former.yaml"
 phase1_checkpoint: "runs/hdi_enhanced/best.pth"
@@ -33,8 +33,8 @@ head:
   roi_size: [28, 28]
   roi_sampling_ratio: 2
   refine_granularity: "dense"
-  composite_ratio: "scalar"     # one coherent ratio per instance (see PHASE3_DIAGNOSIS.md /
-                                # IMPROVEMENTS.md -- compositing is not paper-specified)
+  composite_ratio: "scalar"     # one coherent ratio per instance --
+                                # compositing is not paper-specified
   composite_feather_px: 5       # soft-blend mask boundaries: no ring/outline artifacts
   hidden_dim: 256
   num_conv: 3
@@ -49,7 +49,7 @@ loss:
   silog_lambda: 0.5
   holistic_weight: 0.3   # anti-forgetting: recorded runs drifted the base depth
                          # 0.078 -> 0.139 abs_rel because only ROI pixels were
-                         # supervised (results/, docs/IMPROVEMENTS.md)
+                         # supervised (see results/)
   min_valid_roi_px: 16
 
 data:

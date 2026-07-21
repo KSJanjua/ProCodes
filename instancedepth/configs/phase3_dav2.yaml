@@ -8,7 +8,7 @@ run_name: "phase3_dav2"
 run_root: "runs"
 seed: 2026
 
-freeze_phase1: true   # freeze Phase 1: refinement is non-degrading by construction (docs/AUDIT_2026.md)
+freeze_phase1: true   # freeze Phase 1: refinement is non-degrading by construction
 phase1_config: "instancedepth/configs/hdi_dav2.yaml"
 phase2_config: "instancedepth/configs/phase2_dav2.yaml"
 phase1_checkpoint: "runs/hdi_dav2/best.pth"
@@ -27,8 +27,8 @@ head:
   roi_size: [28, 28]
   roi_sampling_ratio: 2
   refine_granularity: "dense"
-  composite_ratio: "scalar"     # one coherent ratio per instance (see PHASE3_DIAGNOSIS.md /
-                                # IMPROVEMENTS.md -- compositing is not paper-specified)
+  composite_ratio: "scalar"     # one coherent ratio per instance --
+                                # compositing is not paper-specified
   composite_feather_px: 5       # soft-blend mask boundaries: no ring/outline artifacts
   hidden_dim: 256
   num_conv: 3
@@ -43,7 +43,7 @@ loss:
   silog_lambda: 0.5
   holistic_weight: 0.3   # anti-forgetting: recorded runs drifted the base depth
                          # 0.078 -> 0.139 abs_rel because only ROI pixels were
-                         # supervised (results/, docs/IMPROVEMENTS.md)
+                         # supervised (see results/)
   min_valid_roi_px: 16
 
 data:

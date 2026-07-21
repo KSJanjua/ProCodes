@@ -293,7 +293,7 @@ flowchart TB
 > upsampled **ratio** to full-resolution base depth — so `E = 0.5` is an exact
 > no-op and the base map's fine geometry is preserved, merely modulated.
 > (Pasting the 28×28 ROI depth instead was the primary defect in the first
-> implementation — see `PHASE3_DIAGNOSIS.md`.)
+> implementation.)
 
 ---
 
@@ -460,12 +460,8 @@ flowchart LR
 
     subgraph DOCS ["docs/"]
         direction TB
-        D1["PHASE3_DESIGN.md · blueprint"]:::doc
-        D2["PHASE3_DIAGNOSIS.md · defects D1–D5"]:::doc
-        D3["TEMPORAL_DESIGN.md · FlashDepth"]:::doc
-        D4["FLASHDEPTH_ANALYSIS.md · adopt/reject"]:::doc
-        D5["IMPROVEMENTS.md · results analysis"]:::doc
         D6["ARCHITECTURE.md · this file"]:::doc
+        D7["videodepth/docs/DESIGN.md · extension package"]:::doc
     end
 
     classDef p1 fill:#dbeafe,stroke:#2563eb,color:#1e3a8a

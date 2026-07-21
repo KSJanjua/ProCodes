@@ -18,8 +18,8 @@ over the paper's MLP head (Eq. 8):
 
 3. **Bounded correction.** The original E ∈ (0,1) means the ratio 2E spans
    (0,2): the head can halve or double an instance's depth, and any confident
-   mistake paints a hard ratio step at the mask boundary (the ring artifact,
-   docs/AUDIT_2026.md §3.2). Here the correction is
+   mistake paints a hard ratio step at the mask boundary (the ring artifact).
+   Here the correction is
        ratio = 1 + max_corr·tanh(z)   (⇒ e_obj = ratio/2 ∈ (0.5±max_corr/2))
    with zero-init z ⇒ exact identity at init, and a hard cap on how far the
    refinement can ever push depth (default ±15 %) — occlusion corrections in

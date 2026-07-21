@@ -1,6 +1,6 @@
 """Full Depth-Anything-V2 initialization for Phase 1 — the AbsRel lever.
 
-Evidence (docs/AUDIT_2026.md §1.2 + the paper's own Table 2):
+Evidence (the paper's own Table 2):
 
   * this repo's from-scratch Depth-Range decoder:            REL 0.078
   * swapping ONLY the encoder to DAv2's:                     REL 0.0778 (−0.5 %)

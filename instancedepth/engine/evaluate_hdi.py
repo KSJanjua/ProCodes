@@ -90,7 +90,7 @@ def evaluate(
 @torch.no_grad()
 def evaluate_streaming(model: HolisticDepthModel, cfg: HDIConfig, device: torch.device,
                        split: str = "test", max_frames: Optional[int] = None) -> Dict[str, float]:
-    """Sequence-ordered, stateful evaluation (docs/TEMPORAL_DESIGN.md):
+    """Sequence-ordered, stateful evaluation:
     frames processed one at a time in order, temporal state carried within
     each sequence and reset at sequence boundaries. Reports the standard
     dense metrics under streaming plus the temporal-alignment-error (TAE)

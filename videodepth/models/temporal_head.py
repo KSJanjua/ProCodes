@@ -9,7 +9,7 @@ actually turned:
     so it can correct mid-frequency flicker instead of only global drift.
   * trained with an explicit temporal loss (``losses/temporal_losses.py``) —
     the missing gradient that made the first attempt a measured no-op
-    (TAE 0.05868 -> 0.05843; docs/AUDIT_2026.md §1.1).
+    (TAE 0.05868 -> 0.05843).
 
 Deliberately NOT Video-Depth-Anything's clip-attention head: that processes
 32-frame windows jointly through the DPT head (heavy in memory and latency,

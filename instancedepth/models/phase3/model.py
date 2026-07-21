@@ -1,7 +1,7 @@
 """Phase3Model -- composes the (fine-tuned) Phase-1 depth branch and the
 (frozen) Phase-2 instance decoder, adds the Occlusion Pair Relation Reasoning
 head Phi_o, and produces occlusion-corrected depth (paper Sec. 4.2.2 / Eq.
-8-12). See ``docs/PHASE3_DESIGN.md``.
+8-12).
 
 Freeze/train split (paper Sec. 4.3, "Occlusion-Aware Joint Refinement"):
   * Phase 1 (DINOv2 + Depth Range Decoder + Eq.1-4)  : TRAINABLE  (LR 1e-6)
@@ -87,7 +87,7 @@ class Phase3Model(nn.Module):
     def _freeze_phase1(self) -> None:
         """Pin the Phase-1 depth branch (paper fine-tunes it at 1e-6; on this
         single-sensor, ROI-only-supervised data that fine-tune drifts the
-        dense depth 0.078 -> 0.139 abs_rel -- docs/AUDIT_2026.md). Frozen, the
+        dense depth 0.078 -> 0.139 abs_rel). Frozen, the
         dense base stays at Phase-1 quality and refinement is non-degrading by
         construction."""
         for p in self.phase1.parameters():

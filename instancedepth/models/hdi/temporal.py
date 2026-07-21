@@ -1,6 +1,6 @@
 """Temporal alignment module for Phase 1 (FlashDepth Eq. 1-2 adaptation).
 
-Design per ``docs/TEMPORAL_DESIGN.md``: a lightweight recurrent module applied
+A lightweight recurrent module applied
 to a decoder feature map, carrying hidden state across frames of a sequence:
 
     f, H_t   = Recur(Down(F), H_{t-1})       # recurrence over downsampled grid

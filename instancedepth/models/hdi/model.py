@@ -40,7 +40,7 @@ class HolisticDepthModel(nn.Module):
             feat_channels=cfg.decoder.channels_attn,
             cfg=cfg.bins,
         )
-        # FlashDepth-style temporal alignment (docs/TEMPORAL_DESIGN.md):
+        # FlashDepth-style temporal alignment:
         # inserted between decoder and refinement heads, one aligner per
         # configured level. Absent (None) when disabled -> per-frame baseline
         # is bit-identical.

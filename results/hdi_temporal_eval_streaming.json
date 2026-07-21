@@ -7,7 +7,7 @@
   "init_checkpoint": "runs/hdi_enhanced/best.pth",
   "eval_mode": "streaming (sequence-ordered, full test split)",
   "checkpoint": "runs/hdi_temporal/best.pth",
-  "checkpoint_caveat": "best.pth was selected during training on a 100-frame PER-FRAME subset metric (abs_rel), which does not measure temporal consistency at all -- see docs/IMPROVEMENTS.md. latest.pth (iter 8000) has not yet been evaluated on the full streaming split and may differ.",
+  "checkpoint_caveat": "best.pth was selected during training on a 100-frame PER-FRAME subset metric (abs_rel), which does not measure temporal consistency at all. latest.pth (iter 8000) has not yet been evaluated on the full streaming split and may differ.",
   "split": "test",
   "metrics": {
     "abs_rel": 0.07924857164365956,

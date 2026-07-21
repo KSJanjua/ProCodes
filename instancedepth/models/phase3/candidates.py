@@ -13,8 +13,8 @@ occlusion pairs ready for ROIAlign:
 Overlap uses bounding-box IoU by default, not mask IoU: this dataset's GT
 (and hence Phase-2's predicted) masks are modal and disjoint, so occluding
 instances have ~0 mask IoU regardless of confidence -- see
-``Phase3CandidateConfig.overlap_metric`` and ``docs/PHASE3_DIAGNOSIS.md``.
-Deduplication (defect D2) prevents the same instance being refined twice
+``Phase3CandidateConfig.overlap_metric``.
+Deduplication prevents the same instance being refined twice
 with disagreeing correction fields.
 
 Everything here is non-differentiable (thresholds / argmin over frozen
@@ -42,8 +42,7 @@ from instancedepth.utils.phase2_metrics import mask_quality_scores
 class PairSet:
     """Occlusion pairs flattened across the batch (P total).
 
-    Pairs are UNORDERED-DEDUPLICATED (see build_pairs, defect D2 in
-    docs/PHASE3_DIAGNOSIS.md): {A,B} appears once, never as both (A,B) and
+    Pairs are UNORDERED-DEDUPLICATED (see build_pairs): {A,B} appears once, never as both (A,B) and
     (B,A). Member order is canonical: index 0 = the nearer instance (smaller
     predicted Dep, i.e. the occluder), index 1 = the farther one. This gives
     Phi_o a consistent channel semantic and prevents the same person being
@@ -158,7 +157,7 @@ def build_pairs(p2: Phase2Output, cfg: Phase3CandidateConfig) -> PairSet:
         iou.fill_diagonal_(0.0)
         dep_c = dep[b, cand]                                 # (C,)
 
-        # Deduplicate to UNORDERED pairs (defect D2, docs/PHASE3_DIAGNOSIS.md):
+        # Deduplicate to UNORDERED pairs:
         # the paper's directional phrasing ("for each main ... retain the
         # nearest guest") yields both (A,B) and (B,A) for a mutually
         # overlapping pair, which wrote the same person twice with two

@@ -1,4 +1,4 @@
-"""Stage-2 temporal fine-tuning for Phase 1 (docs/TEMPORAL_DESIGN.md).
+"""Stage-2 temporal fine-tuning for Phase 1.
 
 Loads a trained per-frame Phase-1 checkpoint (the stage-1 product), attaches
 the zero-initialized TemporalAligner, and trains on short ordered clips with

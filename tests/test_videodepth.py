@@ -342,7 +342,7 @@ def test_evaluate_phase3_video_module_imports():
 # instancedepth.predict._build_phase3_inferencer: auto-detect vanilla vs
 # bounded relation-head checkpoints so scripts/infer_video.py and
 # make_sequence_videos.py work on EITHER checkpoint type with zero flags
-# (docs/AUDIT_2026.md: this exact mismatch crashed scripts/infer_video.py
+# (this exact mismatch crashed scripts/infer_video.py
 # before this dispatcher existed -- same root cause evaluate_phase3_video.py
 # fixed for the eval path).
 # --------------------------------------------------------------------------- #

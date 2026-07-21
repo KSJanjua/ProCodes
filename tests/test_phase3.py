@@ -43,7 +43,7 @@ def test_build_pairs_finds_overlap_pair_deduplicated():
     p2 = _synthetic_p2()
     cfg = Phase3CandidateConfig()
     pairs = build_pairs(p2, cfg)
-    # q0<->q1 mutually overlap -> ONE unordered pair (defect D2 fix: the old
+    # q0<->q1 mutually overlap -> ONE unordered pair (the old
     # directional build produced both (0,1) and (1,0), writing the same
     # person twice with disagreeing correction fields). q2 stays isolated.
     assert len(pairs) == 1
@@ -401,7 +401,7 @@ def test_occlusion_frame_indices():
 
 
 # --------------------------------------------------------------------------- #
-# freeze_phase1 (docs/AUDIT_2026.md): pin the Phase-1 depth branch so ROI-only
+# freeze_phase1: pin the Phase-1 depth branch so ROI-only
 # Phase-3 supervision can't drift the dense base (0.078 -> 0.139 abs_rel).
 # --------------------------------------------------------------------------- #
 def test_freeze_phase1_default_is_true():

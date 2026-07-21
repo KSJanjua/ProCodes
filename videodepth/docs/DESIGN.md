@@ -19,7 +19,7 @@ wraps or subclasses it.
 
 ## 1. Why the previous temporal attempt measured nothing
 
-`docs/AUDIT_2026.md` §1.1 established three compounding causes, all fixed here:
+A prior diagnosis established three compounding causes, all fixed here:
 
 | # | Root cause | Fix in this package |
 |---|------------|---------------------|

@@ -14,9 +14,8 @@ states) instead of HF's internal matcher/criterion class API, which is not
 part of the library's public surface and is more likely to shift between
 versions.
 
-**Confirmed by execution** (``scripts/verify_mask2former_api.py``, run
-against the real ``facebook/mask2former-swin-large-coco-instance``
-checkpoint -- see the Phase 2 plan, implementation-order step 1): the full
+**Confirmed against** the real ``facebook/mask2former-swin-large-coco-instance``
+checkpoint: the full
 ``Mask2FormerForUniversalSegmentation`` wrapper's own output (not just the
 underlying bare ``Mask2FormerModel`` trunk) already exposes everything this
 module needs --
@@ -63,8 +62,8 @@ log = logging.getLogger("instancedepth.models.phase2.mask2former_wrapper")
 
 # Candidate field names for the per-query embedding *before* the class/mask
 # heads are applied (needed as the depth head's input). Tried in order;
-# first match wins. Update this list once scripts/verify_mask2former_api.py
-# confirms the real name.
+# first match wins -- the first field is the one confirmed present on
+# Mask2FormerForUniversalSegmentation's output (see module docstring).
 _QUERY_EMBED_FIELDS = (
     "transformer_decoder_last_hidden_state",
     "transformer_decoder_hidden_states",
@@ -100,8 +99,7 @@ def _resolve_checkpoint_source(
             raise FileNotFoundError(
                 f"model.checkpoint_dir='{checkpoint_dir}' does not exist. "
                 "Download the checkpoint on a machine with working Hub access "
-                "and copy the folder here -- see scripts/verify_mask2former_api.py's "
-                "module docstring for the exact commands, and "
+                "and copy the folder here -- see "
                 "instancedepth/configs/phase2_mask2former.yaml for where to "
                 "point checkpoint_dir once it's transferred."
             )
@@ -189,10 +187,8 @@ class Mask2FormerWrapper(nn.Module):
             raise RuntimeError(
                 "Could not find a (B, num_queries, hidden_dim) query-embedding "
                 f"field on Mask2FormerForUniversalSegmentation's output among "
-                f"{_QUERY_EMBED_FIELDS}. Run scripts/verify_mask2former_api.py "
-                "and update instancedepth/models/phase2/mask2former_wrapper.py's "
-                "_QUERY_EMBED_FIELDS with the confirmed field name -- refusing "
-                "to silently guess."
+                f"{_QUERY_EMBED_FIELDS}. Update _QUERY_EMBED_FIELDS with the "
+                "confirmed field name -- refusing to silently guess."
             )
 
         return RawMask2FormerPrediction(

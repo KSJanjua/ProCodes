@@ -6,7 +6,7 @@ Metrics:
   * temporal_alignment_error (TAE) — mean |Δpred − Δgt|: the flicker measure
     (0 = prediction tracks GT's motion perfectly; needs no optical flow since
     this data has per-frame metric GT)
-  * gt/pred_temporal_delta         — TAE's context (see AUDIT_2026.md §1.1)
+  * gt/pred_temporal_delta         — TAE's context
   * flicker_ratio = pred_delta/gt_delta — >1 means the prediction moves more
     than the scene does: pure flicker.
 

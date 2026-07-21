@@ -55,7 +55,7 @@ class BinRefinementConfig:
 
 @dataclass
 class TemporalConfig:
-    """FlashDepth-style temporal alignment (docs/TEMPORAL_DESIGN.md).
+    """FlashDepth-style temporal alignment.
     Disabled by default: every existing profile stays the per-frame,
     paper-faithful baseline bit-identically. Enabled only by the dedicated
     stage-2 fine-tune profile (hdi_temporal.yaml)."""

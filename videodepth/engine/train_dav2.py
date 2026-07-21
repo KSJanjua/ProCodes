@@ -1,5 +1,5 @@
 """Fine-tune the full pretrained Depth-Anything-V2 (encoder + DPT head) as
-Phase 1 — the AbsRel lever (docs/AUDIT_2026.md §1.2, videodepth/docs/DESIGN.md).
+Phase 1 — the AbsRel lever (videodepth/docs/DESIGN.md).
 
 Point BOTH paths at the same official checkpoint file:
   * ``backbone.checkpoint_path`` — the DINOv2 wrapper reads the encoder

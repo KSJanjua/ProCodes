@@ -74,7 +74,7 @@ class VideoOptimConfig:
 class VideoEvalConfig:
     """Model selection = streaming abs_rel + tae_weight * TAE.
 
-    This fixes the selection-blindness defect (docs/AUDIT_2026.md): the old
+    This fixes the selection-blindness defect: the old
     temporal run selected best.pth on shuffled per-frame abs_rel, a mode where
     the temporal state is reset every batch and the module is invisible.
     """

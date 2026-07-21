@@ -6,7 +6,7 @@
   "eval_mode": "streaming, PARTIAL SUBSET (--max-batches 100, batch_size 4 -> first ~400 frames of the first 1-2 test sequences only)",
   "checkpoint": "runs/hdi_enhanced/best.pth",
   "split": "test",
-  "note": "NOT comparable to the full-split numbers in hdi_enhanced_eval_streaming.json (abs_rel is ~46% lower here purely because this subset's sequences happen to be easier). Kept only as the diagnostic that first exposed the TAE-noise-floor identity: temporal_alignment_error ~= sqrt(gt_temporal_delta^2 + pred_temporal_delta^2), which holds here to within 0.15% and shows pred/gt frame-to-frame deltas are statistically independent -- i.e. TAE was measuring two uncorrelated noise sources adding in quadrature, not tracking accuracy. See docs/IMPROVEMENTS.md.",
+  "note": "NOT comparable to the full-split numbers in hdi_enhanced_eval_streaming.json (abs_rel is ~46% lower here purely because this subset's sequences happen to be easier). Kept only as the diagnostic that first exposed the TAE-noise-floor identity: temporal_alignment_error ~= sqrt(gt_temporal_delta^2 + pred_temporal_delta^2), which holds here to within 0.15% and shows pred/gt frame-to-frame deltas are statistically independent -- i.e. TAE was measuring two uncorrelated noise sources adding in quadrature, not tracking accuracy.",
   "metrics": {
     "abs_rel": 0.04446858384646475,
     "rms": 0.33352808721363547,

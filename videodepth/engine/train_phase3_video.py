@@ -3,7 +3,7 @@
 Identical to ``instancedepth.engine.train_phase3`` — same data, matcher,
 criterion, optimizer, eval — with ``Phase3VideoModel`` substituted, whose
 ``BoundedPairAttentionHead`` is interface-compatible with the original Φo.
-Pair it with ``freeze_phase1: true`` (docs/AUDIT_2026.md §3.1) so the dense
+Pair it with ``freeze_phase1: true`` so the dense
 base cannot drift and the improved head is the only variable.
 
 Usage:
@@ -54,7 +54,7 @@ def main() -> None:
 
     if not cfg.freeze_phase1:
         log.warning("freeze_phase1 is FALSE — the dense base can drift "
-                    "(0.078 -> 0.139 abs_rel in recorded runs; see docs/AUDIT_2026.md §3.1)")
+                    "(0.078 -> 0.139 abs_rel in recorded runs)")
 
     model = Phase3VideoModel(cfg, max_corr=args.max_corr)
     matcher = Phase2HungarianMatcher(
