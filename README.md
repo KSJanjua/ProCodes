@@ -88,6 +88,21 @@ encoder; `phase3_current.yaml` runs Phase 3 on pre-existing checkpoints.
 `scripts/run_full_pipeline.sh` (baseline) and `scripts/run_dav2_pipeline.sh`
 (DAv2 ablation) chain full train+eval sequences for unattended runs.
 
+## External baseline
+
+Zero-shot Video-Depth-Anything (metric, ViT-L) on the test split, scored with
+this repo's metrics for a directly comparable row. Requires a local clone of
+[Video-Depth-Anything](https://github.com/DepthAnything/Video-Depth-Anything)
+(not a dependency of this repo); pass the same `--hdi-config` your compared
+numbers use so GT and masks are identical.
+
+```bash
+python -m scripts.eval_vda_baseline \
+    --vda-repo /path/to/Video-Depth-Anything \
+    --vda-ckpt /path/to/metric_video_depth_anything_vitl.pth \
+    --hdi-config instancedepth/configs/hdi_dav2.yaml --split test
+```
+
 ## Qualitative evaluation
 
 ```bash
