@@ -43,7 +43,7 @@ class VideoDepthModel(nn.Module):
         from instancedepth.utils.checkpoint import load_checkpoint
 
         hdi_cfg = HDIConfig.from_yaml(cfg.hdi_config)
-        hdi_cfg.temporal.enabled = False   # the old inline module must stay off
+        hdi_cfg.temporal.enabled = False   # use this package's stabilizer, not the inline Phase-1 path
         spatial = HolisticDepthModel(hdi_cfg)
         if cfg.init_checkpoint:
             load_checkpoint(Path(cfg.init_checkpoint), spatial, restore_rng=False)

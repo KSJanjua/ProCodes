@@ -22,10 +22,12 @@ class Phase2Model(nn.Module):
         checkpoint_dir: Optional[str] = None,
         allow_hub_download: bool = False,
         num_classes: int = 1,
+        num_queries: int = 100,
     ) -> None:
         super().__init__()
         self.backbone_decoder = Mask2FormerWrapper(
-            checkpoint, checkpoint_dir=checkpoint_dir, allow_hub_download=allow_hub_download, num_classes=num_classes,
+            checkpoint, checkpoint_dir=checkpoint_dir, allow_hub_download=allow_hub_download,
+            num_classes=num_classes, num_queries=num_queries,
         )
         self.depth_head = DepthLayerHead(self.backbone_decoder.hidden_dim)
 

@@ -137,6 +137,7 @@ def main() -> None:
     model = Phase2Model(
         checkpoint=cfg.model.checkpoint, checkpoint_dir=cfg.model.checkpoint_dir,
         allow_hub_download=cfg.model.allow_hub_download, num_classes=cfg.model.num_classes,
+        num_queries=cfg.model.num_queries,
     )
     matcher = Phase2HungarianMatcher(
         cost_class=cfg.matcher.cost_class, cost_mask=cfg.matcher.cost_mask,

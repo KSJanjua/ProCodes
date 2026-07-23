@@ -1,5 +1,12 @@
 """Prediction heads for the iterative bin refinement (Eq. 1-4).
 
+The refinement step (next file) needs three tiny "output networks" — called heads — to turn feature maps into actual numbers: a seed depth, a per-bin confidence, and per-bin ordinal scores. This file defines those three heads. They're small on purpose (a few conv layers). 
+
+Input/Output:
+InitialDepthHead: in F_0 (B,256,h,w) → out seed depth (B,1,h,w), forced positive.
+ConfidenceHead: in features plus current depth (B,256+1,h,w) → out (B,5,h,w) confidences in [0,1].
+OrdinalBinHead: in features (B,256,h,w) → out (B,5,h,w) raw logits (5 = number of bins rd).
+
 Head architectures ("a small network" / "a lightweight convolutional
 network" in the paper, with no further detail) are a own-engineering-
 decision, DPT-output-head-scale conv stacks. Their *existence*, *inputs*, and (for the confidence head) their
@@ -28,7 +35,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-
+#  a reusable little network: Conv3×3 → GroupNorm → ReLU → Conv1×1. Every head is built from this.
 def _small_conv_head(in_channels: int, out_channels: int, hidden: int | None = None) -> nn.Sequential:
     hidden = hidden or max(in_channels // 2, out_channels)
     return nn.Sequential(
@@ -38,7 +45,7 @@ def _small_conv_head(in_channels: int, out_channels: int, hidden: int | None = N
         nn.Conv2d(hidden, out_channels, kernel_size=1),
     )
 
-
+# makes the seed depth D_0 from the coarsest features, then applies Softplus so depth is always positive (you can't be −2 m away).
 class InitialDepthHead(nn.Module):
     """Produces the seed depth D_0 from the coarsest level's features F_0.
     Positivity via softplus (smoother than DAv2's plain ReLU near 0; same
@@ -52,7 +59,7 @@ class InitialDepthHead(nn.Module):
     def forward(self, f0: torch.Tensor) -> torch.Tensor:
         return self.softplus(self.head(f0))
 
-
+# takes features and the current depth estimate, outputs a confidence per bin via sigmoid: Ci = Sigmoid(Φd(Fi,Di))
 class ConfidenceHead(nn.Module):
     """Phi_d in Eq. 1: C_i = Sigmoid(Phi_d(F_i, D_i))."""
 
@@ -65,7 +72,7 @@ class ConfidenceHead(nn.Module):
         x = torch.cat([f_i, d_i], dim=1)
         return self.sigmoid(self.head(x))
 
-
+# outputs 5 ordinal scores per pixel. Important design choice: it uses independent per-bin sigmoids, not a softmax. Softmax would force "pick exactly one bin"; ordinal sigmoids answer 5 independent yes/no questions ("farther than 2 m? than 4 m? …"), which is what the equations need. It returns raw logits; the sigmoid is applied later where a probability is actually needed 
 class OrdinalBinHead(nn.Module):
     """S_i in Eq. 2-4: independent per-bin sigmoid (ordinal encoding) --
     NOT a softmax over mutually-exclusive classes.

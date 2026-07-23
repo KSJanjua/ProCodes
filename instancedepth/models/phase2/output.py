@@ -2,7 +2,7 @@
 Mirrors instancedepth/models/hdi/output.py's HolisticDepthOutput pattern:
 dataclass, contract_version, deliberately over-exposing (query_embeddings
 isn't paper-required but is cheap to keep for future use) rather than
-under-exposing, since Phase 3 doesn't exist yet to push back on the schema.
+under-exposing.
 """
 
 from __future__ import annotations

@@ -1,4 +1,7 @@
-"""Split + statistics + CLI for the GID-style data engine.
+"""
+run_generate.py is the one command that runs the whole data engine. It discovers all sequences, builds SAM3 once and reuses it, annotates every video, then splits into train/test at the video level — 20% to test, stratified by batch and seeded so it's reproducible and there's no frame leakage between splits. It also computes the paper's Figure-3 dataset statistics — object counts per depth bucket and per-video averages — and writes train.txt, test.txt, and meta.json. Those three plus the per-sequence files are exactly what the training Dataset reads.
+
+Split + statistics + CLI for the GID-style data engine.
 
 split_sequences : video-level split with a 20% test fraction (paper Sec. 3
                   assigns "a larger proportion (20%) to the test set"),
@@ -8,6 +11,8 @@ split_sequences : video-level split with a 20% test fraction (paper Sec. 3
 compute_statistics : Fig. 3 analogs — object counts per depth-range bucket
                   (3a) and per-video (avg objects, num frames) scatter data (3b).
 main            : `python -m instancedepth.data_engine.run_generate --config cfg.yaml`
+
+Usage: python -m instancedepth.data_engine.run_generate --config instancedepth/configs/gid_custom.yaml
 """
 
 from __future__ import annotations
@@ -27,7 +32,7 @@ from .sam3_engine import build_segmenter
 
 log = logging.getLogger("data_engine.run")
 
-
+# decides which whole videos go to test (default 20%). Done at the video level. it takes 20% from each batch, so every recording condition appears in both splits
 # --------------------------------------------------------------------------- #
 def split_sequences(
     sequences: List[SequenceRecord], cfg: DataEngineConfig
@@ -52,7 +57,7 @@ def split_sequences(
         train_ids += ids[n_test:]
     return sorted(train_ids), sorted(test_ids)
 
-
+# how many objects fall in each 2 m depth bucket (0–2 m, 2–4 m, …), and per-video stats (frames, tracks, avg objects/frame), plus totals and averages.
 # --------------------------------------------------------------------------- #
 def compute_statistics(manifests: List[Dict], bucket_m: float = 2.0) -> Dict:
     """Depth-range population (Fig. 3a) and per-video object/frame stats (Fig. 3b)."""
@@ -86,13 +91,13 @@ def compute_statistics(manifests: List[Dict], bucket_m: float = 2.0) -> Dict:
         ),
     )
 
-
+# discover_dataset → build_segmenter (once) → loop annotate_sequence over every video (in a try/finally that always closes the segmenter) → split_sequences → write train.txt/test.txt → compute_statistics → write meta.json. Returns the meta dict.
 # --------------------------------------------------------------------------- #
 def generate(cfg: DataEngineConfig, limit: int | None = None) -> Dict:
     sequences = discover_dataset(cfg)
     if limit:
         sequences = sequences[:limit]
-
+    # Building SAM3 is expensive (loads a big model onto the GPU), so it's created once and reused for every video
     segmenter = build_segmenter(cfg.sam3)
     manifests: List[Dict] = []
     try:

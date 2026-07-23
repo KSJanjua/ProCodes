@@ -27,7 +27,7 @@ class BackboneConfig:
     checkpoint_path: Optional[str] = (
         "/home/work/intern_storage/Ayush/weights/dinov2_vitl14.safetensors"
     )                                            # local .safetensors preferred over any download
-    hook_layers: Tuple[int, ...] = (5, 14, 23)   # 0-indexed transformer blocks fed to the decoder
+    hook_layers: Tuple[int, ...] = (23, 14, 5)   # 0-indexed transformer blocks fed to the decoder
     freeze: bool = False                          # paper: encoder is trainable in this stage
     allow_hub_download: bool = False              # explicit opt-in; local checkpoint is preferred (see
                                                   # instancedepth/models/backbone/dinov2_wrapper.py)
@@ -38,7 +38,7 @@ class DecoderConfig:
     """Depth Range Feature Decoder (Fig. 5): 3 coarse-to-fine levels."""
 
     target_fractions: Tuple[float, ...] = (1 / 8, 1 / 4, 1 / 2)   # of input resolution
-    patch_kernels: Tuple[int, ...] = (16, 8, 4)                    # per-level patchify kernel/stride
+    patch_kernels: Tuple[int, ...] = (4, 8, 16)                    # per-level patchify kernel/stride
     channels_dec: int = 256          # channel width after backbone->level resize
     channels_attn: int = 256         # patch-attention working dimension
     attn_heads: int = 8

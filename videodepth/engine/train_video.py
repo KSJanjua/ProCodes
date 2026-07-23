@@ -1,16 +1,14 @@
 """Temporal-stage training: trained Phase-1 spatial model (frozen) + streaming
-temporal stabilizer, on motion-weighted clips, with the temporal loss the
-first attempt was missing.
+temporal stabilizer, on motion-weighted clips, with an explicit temporal loss.
 
-The three root causes of the earlier null result and
-their fixes here:
+Three ingredients make the temporal stage work:
 
-  1. **No temporal loss** -> ``TemporalGradientMatchingLoss`` (VDA's loss
-     without VDA's heavy clip-attention architecture) is the training signal.
-  2. **No motion in training clips** -> motion-weighted sampling over strides
-     spanning up to ~100 frames (data/motion_clips.py).
-  3. **Selection blind to temporal quality** -> best.pth chosen on a
-     STREAMING eval score: abs_rel + tae_weight · TAE.
+  1. **Temporal loss** -> ``TemporalGradientMatchingLoss`` (VDA's loss without
+     VDA's heavy clip-attention architecture) is the anti-flicker training signal.
+  2. **Motion-weighted clips** -> sampling over strides spanning up to ~100
+     frames, where frame-to-frame motion is actually visible (data/motion_clips.py).
+  3. **Streaming selection** -> best.pth chosen on a STREAMING eval score:
+     abs_rel + tae_weight · TAE, so checkpoint choice reflects temporal quality.
 
 Usage (server, project root):
 

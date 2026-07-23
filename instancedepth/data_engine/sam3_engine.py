@@ -53,6 +53,7 @@ class MaskObs:
 # --------------------------------------------------------------------------- #
 # helpers
 # --------------------------------------------------------------------------- #
+# normalizer - SAM3 backends may return the mask as a torch tensor or numpy, with an extra dimension, as raw "logits", probabilities, or booleans, and sometimes at a smaller resolution. This function turns any of those into a clean boolean mask at full image siz
 def _to_bool_mask(m, hw: Tuple[int, int]) -> np.ndarray:
     """Accept torch/np, (H,W)/(1,H,W), logits/probs/bool -> bool (H,W)."""
     try:
@@ -132,6 +133,7 @@ class NativeSAM3Segmenter(VideoSegmenter):
                         [cv2.IMWRITE_JPEG_QUALITY, 95])
         return self._tmp
 
+    # asks SAM3 to propagate (spread the tracked object through all frames) and yields per-frame results, tolerating small differences between SAM3 repo versions.
     def _iter_propagation(self, session_id) -> Iterable[dict]:
         """Yield per-frame output dicts, tolerating minor repo API drift."""
         req = dict(type="propagate_in_video", session_id=session_id,
@@ -149,6 +151,7 @@ class NativeSAM3Segmenter(VideoSegmenter):
             yield from outs
 
     @staticmethod
+    # digs the frame index, object ids, masks, and scores out of SAM3's response (whose exact key names vary between versions).
     def _frame_payload(out: dict) -> Tuple[int, List[int], List, List[float]]:
         fi = out.get("frame_index", out.get("frame_idx"))
         body = out.get("outputs", out)
@@ -158,6 +161,7 @@ class NativeSAM3Segmenter(VideoSegmenter):
         scores = body.get("out_probs", body.get("scores", [1.0] * len(ids)))
         return int(fi), list(ids), list(masks), [float(s) for s in scores]
 
+    #  the main flow: start a session on the frames folder, inject the text prompt at frame 0, propagate, and for every frame keep objects that pass the score floor and area check. Closes the session at the end.
     def track_concept(self, rgb_paths, hw, prompt) -> FramesOut:
         frames_dir = self._stage_frames(rgb_paths)
         resp = self.predictor.handle_request(
@@ -193,6 +197,7 @@ class NativeSAM3Segmenter(VideoSegmenter):
             except Exception:                          # noqa: BLE001
                 log.debug("close_session failed (non-fatal)")
 
+    # deletes the temporary frames folder.
     def close(self) -> None:
         if self._tmp is not None:
             shutil.rmtree(self._tmp, ignore_errors=True)

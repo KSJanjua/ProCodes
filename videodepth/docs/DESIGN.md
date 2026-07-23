@@ -17,15 +17,15 @@ wraps or subclasses it.
 
 ---
 
-## 1. Why the previous temporal attempt measured nothing
+## 1. The three ingredients of the temporal stage
 
-A prior diagnosis established three compounding causes, all fixed here:
+A trained streaming temporal stage needs three things working together:
 
-| # | Root cause | Fix in this package |
-|---|------------|---------------------|
-| 1 | **No temporal loss.** The ConvGRU had state but the training loss was purely per-frame — no gradient ever rewarded smoothness, so the zero-init module correctly stayed a no-op. | `losses/temporal_losses.py` — Temporal Gradient Matching (TGM). |
-| 2 | **No motion in training clips.** Frame-to-frame motion in this data is tiny; it becomes visible over ~100-frame spans (user-confirmed), but clips spanned ≤33 frames and were sampled uniformly. | `data/motion_clips.py` — strides to 24 (span 97), motion-weighted sampling, `min_seq_len=60` drops the ~50-frame sequences. |
-| 3 | **Selection blind to temporal quality.** `best.pth` was picked on shuffled per-frame abs_rel with state reset every batch — a mode where the temporal module is invisible. | `engine/train_video.py::make_eval_fn` — selection on **streaming** `abs_rel + 4·TAE`. |
+| # | Ingredient | Where |
+|---|------------|-------|
+| 1 | **A temporal loss** — a gradient that rewards frame-to-frame smoothness (the per-frame spatial loss alone never does). | `losses/temporal_losses.py` — Temporal Gradient Matching (TGM). |
+| 2 | **Motion in the training clips** — frame-to-frame motion in this data is tiny and only becomes visible over ~100-frame spans, so clips must reach that far. | `data/motion_clips.py` — strides to 24 (span 97), motion-weighted sampling, `min_seq_len=60` drops the ~50-frame sequences. |
+| 3 | **Selection that sees temporal quality** — `best.pth` chosen on a streaming (sequence-ordered, stateful) score, not shuffled per-frame accuracy. | `engine/train_video.py::make_eval_fn` — selection on **streaming** `abs_rel + 4·TAE`. |
 
 ## 2. The temporal loss: TGM (VDA's loss without VDA's architecture)
 
@@ -56,7 +56,7 @@ pinned while flicker is squeezed.
 zero-init output (**exact no-op at init**: the model can never start worse
 than the per-frame baseline; unit-tested), O(1) streaming state (arbitrary
 video length at inference), `downsample: 0.25` (a quarter-side grid can fix
-mid-frequency flicker; the old 0.10 could only shift global scale). A few
+mid-frequency flicker, not just global scale). A few
 hundred K parameters; spatial weights frozen (stage-2a) for clean attribution.
 
 `models/video_model.py` composes it with the trained Phase-1 checkpoint by
@@ -73,7 +73,7 @@ Three defects of the paper's Eq. 8 MLP head, each fixed:
 |---|---|---|
 | 1×1 convs only | no spatial context — can't see *where* the overlap is | 3×3 conv encoder |
 | pair coupling = channel concat | no explicit reasoning over the partner | cross-attention: each member's ROI tokens attend to the *other* member's |
-| E ∈ (0,1) ⇒ ratio 2E ∈ (0,2) | can halve/double depth; confident mistakes paint hard ratio steps = the **boundary rings** (AUDIT §3.2) | `ratio = 1 + max_corr·tanh(z)`, default ±15 % — rings bounded by construction, graceful degradation |
+| E ∈ (0,1) ⇒ ratio 2E ∈ (0,2) | can halve/double depth; confident mistakes paint hard ratio steps that show as **boundary rings** | `ratio = 1 + max_corr·tanh(z)`, default ±15 % — rings bounded by construction, graceful degradation |
 
 Interface-identical to `OcclusionRelationHead` (`e_obj = ratio/2`, `d_hat =
 2·e_obj·d_obj`), so compositor, losses, matcher and trainer run unchanged —
@@ -100,7 +100,7 @@ per-person depth through occlusions).
 
 ## 4½. The AbsRel lever: full-DAv2 Phase 1 (`models/dav2_dpt.py`)
 
-The audit's remaining headline gap is REL: paper 0.045 on GID vs 0.078 here
+The remaining headline gap is REL: paper 0.045 on GID vs 0.078 here
 (note: different datasets, soft comparison — and RMS 0.38 here already *beats*
 the paper's 0.397, so the error is concentrated at near-range pixels, which
 REL weights most). The evidence chain for the fix:
@@ -193,7 +193,7 @@ python -m instancedepth.engine.evaluate_phase3 \
 | Row | Config | Isolates |
 |---|---|---|
 | per-frame baseline | Phase-1 checkpoint via `evaluate_video` | the flicker floor |
-| + temporal head, no TGM | `loss.temporal_weight=0` | architecture alone (expect ≈ null, reproducing AUDIT §1.1) |
+| + temporal head, no TGM | `loss.temporal_weight=0` | architecture alone (expect ≈ null: architecture without the loss) |
 | + TGM | default | **the loss is the contribution** |
 | + motion weighting off | `clips.motion_weighting=false` | sampling contribution |
 | Φo (paper) vs bounded pair-attention | `train_phase3` vs `train_phase3_video` | head contribution |
@@ -206,6 +206,6 @@ python -m instancedepth.engine.evaluate_phase3 \
   `flicker_ratio` metric are where the improvement will show. Report both.
 - `TrackDepthMemory` improves *instance-layer* stability and occluded-instance
   depth immediately and visibly; it does not change dense-map metrics.
-- Dense amodal supervision remains impossible with single-sensor GT
-  (AUDIT §3.3) — the temporal memory is precisely the workaround: it supplies
-  the occluded instance's depth from *time* instead of from a second sensor.
+- Dense amodal supervision remains impossible with single-sensor GT — the
+  temporal memory is precisely the workaround: it supplies the occluded
+  instance's depth from *time* instead of from a second sensor.

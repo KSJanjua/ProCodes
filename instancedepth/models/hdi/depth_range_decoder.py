@@ -1,5 +1,21 @@
 """Depth Range Feature Decoder (paper Fig. 5).
 
+DINOv2's features are small (52×92) and generic. Before we can predict a sharp, full-size depth map, 
+we need to (a) enlarge them toward image size and (b) specialize them for depth at several scales. 
+This file is the Depth Range Feature Decoder (the paper's Fig. 5). 
+It builds three coarse-to-fine feature maps F_0, F_1, F_2 at 1/8, 1/4, 1/2 of the image — the raw material the depth-refinement step works on.
+
+Consumes the backbone's 3 maps; feeds F_0,F_1,F_2 into the refinement step. F_2 (the finest) is also exported to Phase 2/3.
+Receives: the 3 backbone maps. Produces: DepthRangeFeatures(levels=[F_0, F_1, F_2]).
+
+Input:
+3 tensors (B, 1024, 52, 92), coarse-to-fine (shallow block → deep block).
+
+Output: 
+3 tensors at increasing resolution. For 728×1288: F_0 ≈ (B,256,91,161), F_1 ≈ (B,256,182,322), F_2 ≈ (B,256,364,644). 256 = channels_attn
+
+It turns the backbone's small features into three depth-specialized feature maps at 1/8, 1/4, and 1/2 resolution. Each level projects, resizes, does 'patch attention' — a transformer block over patches — then unpatchifies. Crucially it fuses top-down: each finer level adds in the upsampled coarser level, so the fine features inherit global depth context. The finest map, F_2, is also what we export to Phases 2 and 3.
+
 Architecture, and exactly which parts are paper-derived vs. engineering
 judgment, is summarized below:
 
@@ -9,7 +25,7 @@ judgment, is summarized below:
   resolution -> patchify (Conv2d, kernel/stride = level's patch size) ->
   linear projection -> patch attention (pre-LN multi-head self-attention +
   FFN) -> unpatchify -> fuse with the coarser level's (upsampled) output.
-- Patch kernels (16, 8, 4 for levels 0, 1, 2) are given by Fig. 5; the
+- Patch kernels (4, 8, 16 for levels 0, 1, 2) are given by Fig. 5; the
   resize-to-target-resolution and patchify steps are separated (rather than
   done in one strided conv) because the target resolutions are not integer
   multiples of the backbone's native 52x92 grid -- bilinear resize handles
@@ -30,7 +46,7 @@ import torch.nn.functional as F
 
 from instancedepth.configs.config import DecoderConfig
 
-
+# The patchify step is a conv with stride 16, so it needs the feature map's height and width to be multiples of 16. Our level resolutions like 91×161 aren't, so _pad_to_multiple adds just enough zero rows/columns on the bottom and right to reach the next multiple (91→96, 161→176), remembers how much it added, and after attention we crop that padding back off
 def _pad_to_multiple(x: torch.Tensor, k: int) -> Tuple[torch.Tensor, Tuple[int, int]]:
     """Zero-pad the last two dims of ``x`` up to the next multiple of ``k``.
     Returns the padded tensor and (pad_h, pad_w) so the caller can crop back."""
@@ -41,7 +57,7 @@ def _pad_to_multiple(x: torch.Tensor, k: int) -> Tuple[torch.Tensor, Tuple[int, 
         x = F.pad(x, (0, pad_w, 0, pad_h))
     return x, (pad_h, pad_w)
 
-
+# each patch attends to the others, then a small MLP refines it. 
 class PreLNTransformerBlock(nn.Module):
     """Standard pre-LN multi-head self-attention + FFN block ("Patch
     Attention" in Fig. 5 -- the paper gives no internal formula for this
@@ -62,7 +78,7 @@ class PreLNTransformerBlock(nn.Module):
         x = x + self.mlp(self.norm2(x))
         return x
 
-
+# one coarse-to-fine level. Its forward does 5 steps: (1) project_in shrinks 1024→256 channels; (2) resize to this level's target resolution; (3) patchify (a strided conv, kernel = 16/8/4) into tokens; (4) run patch-attention blocks; (5) unpatchify (transposed conv) back to a per-pixel map, cropped to the exact target size. Adds a learned positional embedding so attention knows where each patch is.
 class DecoderLevel(nn.Module):
     """One coarse-to-fine level of the Depth Range Feature Decoder."""
 
@@ -128,7 +144,7 @@ class DecoderLevel(nn.Module):
         out = out[:, :, : self.target_hw[0], : self.target_hw[1]]
         return out
 
-
+# just holds [F_0,F_1,F_2]; .finest returns F_2
 @dataclass
 class DepthRangeFeatures:
     """F_0, F_1, F_2 from the Depth Range Feature Decoder -- F_2 is the
@@ -140,7 +156,7 @@ class DepthRangeFeatures:
     def finest(self) -> torch.Tensor:
         return self.levels[-1]
 
-
+# builds the 3 levels and, in forward, runs them coarse→fine with top-down additive fusion: each finer level's output gets the previous (coarser) level's output upsampled and added in
 class DepthRangeFeatureDecoder(nn.Module):
     """Fig. 5: 3 coarse-to-fine levels, top-down additive fusion."""
 
@@ -177,8 +193,8 @@ class DepthRangeFeatureDecoder(nn.Module):
         Parameters
         ----------
         backbone_features : list of 3 tensors from ``DINOv2Backbone``,
-            coarse-to-fine order (index 0 = shallowest selected block,
-            index 2 = deepest/final selected block), each
+            coarse-to-fine order (index 0 = deepest/final selected block,
+            index 2 = shallowest selected block), each
             (B, embed_dim, h_bb, w_bb).
 
         Returns

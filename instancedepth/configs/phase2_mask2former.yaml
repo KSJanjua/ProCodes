@@ -14,6 +14,7 @@ model:
                           # checkpoint. Set back to null only if you move/delete the folder.
   allow_hub_download: false   # set true only if this machine has real (non-proxied) Hub access
   num_classes: 1   # "person", per instancedepth/configs/gid_custom.yaml's category_ids
+  num_queries: 100   # reduced from the checkpoint's 200; ample for this dataset, halves the query budget
 
 matcher:
   cost_class: 2.0

@@ -41,13 +41,14 @@ log = logging.getLogger("data_engine.annotate")
 
 
 # --------------------------------------------------------------------------- #
+# finds the tight rectangle [x_min, y_min, x_max+1, y_max+1] around the True pixels.
 def _bbox_from_mask(mask: np.ndarray) -> Optional[List[int]]:
     ys, xs = np.nonzero(mask)
     if xs.size == 0:
         return None
     return [int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1]
 
-
+# computes the person's depth layer: takes all depth values inside their mask, keeps only the valid ones (> 0), and returns their mean plus the count of valid pixels.
 def _depth_layer(mask: np.ndarray, depth_m: np.ndarray) -> Tuple[float, int]:
     """GT instance depth layer = mean of VALID metric depth inside the mask.
 
@@ -60,7 +61,7 @@ def _depth_layer(mask: np.ndarray, depth_m: np.ndarray) -> Tuple[float, int]:
         return 0.0, 0
     return float(vals.mean()), int(vals.size)
 
-
+# The saved mask gives each pixel to exactly one person, but masks can overlap. When two people overlap a pixel, it assigns the pixel to the one with the smaller depth
 def _flatten_id_map(
     tracks: Dict[int, Track], fi: int, hw: Tuple[int, int],
     layer_by_gid: Dict[int, float],
@@ -78,7 +79,7 @@ def _flatten_id_map(
         depth_buf[win] = d
     return id_map
 
-
+# merges all floor/ground masks on a frame into one boolean floor mask.
 def _ground_union(per_concept: Dict[str, FramesOut], fi: int, hw) -> np.ndarray:
     g = np.zeros(hw, dtype=bool)
     for frames_out in per_concept.values():
@@ -86,7 +87,7 @@ def _ground_union(per_concept: Dict[str, FramesOut], fi: int, hw) -> np.ndarray:
             g |= obs.mask
     return g
 
-
+# optional: paints colored masks + a red-tinted floor over the RGB and saves it, so you can eyeball whether the labels look right.
 def _preview(rgb_path: Path, id_map: np.ndarray, ground: np.ndarray, out: Path) -> None:
     img = cv2.imread(str(rgb_path), cv2.IMREAD_COLOR)
     rng = np.random.default_rng(0)
@@ -98,7 +99,12 @@ def _preview(rgb_path: Path, id_map: np.ndarray, ground: np.ndarray, out: Path) 
     out.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(out), img)
 
-
+# Read the first RGB to learn image size hw.
+# Run SAM3 for each object prompt and each ground prompt → raw per-concept masks.
+# build_tracks(...) → clean identities (from identity.py).
+# detect_unit_scale(...) → depth scale for this video.
+# For each frame: load depth in meters; for each track present, compute bbox + depth layer + area and append an instance record; build the flattened id-map (nearest-depth-wins); build the ground union and let objects win over ground (ground &= id_map == 0); write the two PNGs;
+# Write annotations.json; 
 # --------------------------------------------------------------------------- #
 def annotate_sequence(
     seq: SequenceRecord,

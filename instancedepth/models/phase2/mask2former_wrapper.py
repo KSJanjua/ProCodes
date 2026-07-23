@@ -128,6 +128,7 @@ class Mask2FormerWrapper(nn.Module):
         checkpoint_dir: Optional[str] = None,
         allow_hub_download: bool = False,
         num_classes: Optional[int] = None,
+        num_queries: Optional[int] = None,
     ) -> None:
         """
         Parameters
@@ -147,6 +148,12 @@ class Mask2FormerWrapper(nn.Module):
             standard fine-tuning practice).
             ``None`` keeps COCO's original 80-class head (useful only for
             the verification step / sanity-checking the loaded weights).
+        num_queries : if set, overrides the checkpoint's query count. The
+            COCO checkpoint ships 200; the only weights whose shape depends on
+            the count are the two query-embedding tables (``queries_embedder``
+            / ``queries_features``), which are reinitialized, while every other
+            weight still loads from the checkpoint. ``None`` keeps the
+            checkpoint's original count.
         """
         super().__init__()
         from transformers import Mask2FormerConfig, Mask2FormerForUniversalSegmentation
@@ -156,11 +163,13 @@ class Mask2FormerWrapper(nn.Module):
         config: Mask2FormerConfig = Mask2FormerConfig.from_pretrained(source, local_files_only=local_files_only)
         if num_classes is not None:
             config.num_labels = num_classes
+        if num_queries is not None:
+            config.num_queries = num_queries
 
         self.model = Mask2FormerForUniversalSegmentation.from_pretrained(
             source,
             config=config,
-            ignore_mismatched_sizes=(num_classes is not None),
+            ignore_mismatched_sizes=(num_classes is not None or num_queries is not None),
             local_files_only=local_files_only,
         )
         # config.hidden_dim (256) is confirmed present directly on

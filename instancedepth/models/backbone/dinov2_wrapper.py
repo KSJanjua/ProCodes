@@ -1,5 +1,19 @@
 """DINOv2 backbone wrapper for the Holistic Depth Initialization model.
 
+This wraps DINOv2, our pretrained backbone, and exposes three intermediate feature maps — 
+from blocks 5, 14, and 23 — so the decoder gets a multi-scale view: shallow features for detail, 
+deep features for semantics. It starts from the vanilla self-supervised DINOv2 weights, which is what the paper specifies, 
+and we have a DAv2 variant that loads a depth-fine-tuned encoder for the ablation. 
+
+Input : 
+A batch of images, ImageNet-normalized, with H and W divisible by 14. Example: (4, 3, 728, 1288) (4 images).
+
+Output : 
+A Python list of 3 tensors, each (4, 1024, 52, 92).  (52 = 728/14, 92 = 1288/14).  
+The three tensors are the outputs of blocks 5, 14, and 23 of the DINOv2 encoder.
+All three are the same size but come from different depths of the network (shallow = fine detail, deep = high-level meaning). 
+1024 = DINOv2-Large's feature width (embed_dim).
+
 Design decisions and their provenance:
 
 - We depend on ``transformers.Dinov2Model`` rather than vendoring the
@@ -100,6 +114,7 @@ def build_dinov2_config(name: str) -> Dinov2Config:
 # Weight loading: local safetensors (either HF-format or original-format),
 # with network download as an explicit, opt-in-only fallback.
 # --------------------------------------------------------------------------- #
+# DINOv2 weights come in different "key-naming" styles depending on where you downloaded them. This renames the original Meta format into the HuggingFace format so the weights fit our model. 
 def _rename_original_dinov2_state_dict(state_dict: Dict[str, torch.Tensor], config: Dinov2Config) -> Dict[str, torch.Tensor]:
     """Convert an *original* facebookresearch/dinov2 (torch.hub-style)
     state dict into HF ``Dinov2Model`` key naming.
@@ -181,7 +196,7 @@ def _looks_like_dav2_format(keys: List[str]) -> bool:
     The ``pretrained.`` prefix is the reliable signature."""
     return any(k.startswith("pretrained.") for k in keys)
 
-
+#  if you hand it a Depth-Anything-V2 checkpoint (which is DINOv2 + a depth head bundled together), it extracts just the DINOv2 encoder and throws away the depth head
 def _convert_dav2_encoder_state_dict(
     state_dict: Dict[str, torch.Tensor], config: Dinov2Config
 ) -> Dict[str, torch.Tensor]:
@@ -212,7 +227,7 @@ def _convert_dav2_encoder_state_dict(
     )
     return _rename_original_dinov2_state_dict(encoder, config)
 
-
+# reads either .safetensors or .pth, unwrapping common holder keys.
 def _read_state_dict(path: str) -> Dict[str, torch.Tensor]:
     """Load a raw state dict from either a ``.safetensors`` or a
     ``.pth``/``.pt`` file. The vanilla DINOv2 checkpoint this project uses is
@@ -361,6 +376,7 @@ class DINOv2Backbone(nn.Module):
             self.model.eval()  # keep frozen backbone's BatchNorm/dropout (if any) in eval mode
         return self
 
+    # runs DINOv2 asking for all hidden states, then picks out the outputs of blocks 23, 14, 5 (hook_layers), drops the special CLS/register tokens, and reshapes the remaining patch tokens back into spatial (B, 1024, h, w) maps.
     def forward(self, pixel_values: torch.Tensor) -> List[torch.Tensor]:
         """
         Parameters
@@ -397,3 +413,5 @@ class DINOv2Backbone(nn.Module):
             spatial = patch_tokens.transpose(1, 2).reshape(B, self.embed_dim, h, w)
             features.append(spatial)
         return features
+        
+        # DINOv2 outputs a flat list of tokens per patch; this turns that flat list back into a 2-D grid (52×92) so it looks like an image-shaped feature map again

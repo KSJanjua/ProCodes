@@ -22,6 +22,10 @@ class Phase2ModelConfig:
     allow_hub_download: bool = False        # explicit opt-in; local checkpoint_dir is preferred (see
                                              # instancedepth/models/phase2/mask2former_wrapper.py)
     num_classes: int = 1   # this dataset: "person" only (gid_custom.yaml's category_ids)
+    num_queries: int = 100   # COCO Mask2Former ships 200; 100 is ample for this dataset's
+                             # few-people frames and halves the transformer-decoder/matcher query
+                             # budget. Only the two query-embedding tables depend on the count, so
+                             # they are reinitialized while the rest of the checkpoint loads as-is.
 
 
 @dataclass

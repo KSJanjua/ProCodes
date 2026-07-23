@@ -1,4 +1,7 @@
-"""HolisticDepthModel -- composes the backbone, Depth Range Feature Decoder,
+"""HolisticDepthModel -- 
+full Phase 1 module. It chains backbone → decoder → iterative refinement, upsamples the final depth to input resolution, and returns a structured output. It exports F_2 as feat_final and all three decoder levels for Phase 3, and keeps D_1/D_2 and the bin outputs for deep supervision.
+
+composes the backbone, Depth Range Feature Decoder,
 and Eq. 1-4 iterative bin refinement into the full Phase 1 (Holistic Depth
 Initialization) model.
 

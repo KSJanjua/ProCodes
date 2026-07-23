@@ -1,5 +1,7 @@
 """Phase 1 (Holistic Depth Initialization) losses.
 
+ file computes Phase 1's loss — comparing predicted depth (and bins) against the sensor's ground-truth depth — so training can push the error down. Note: the paper specifies no Phase-1 loss, so every term here is a documented engineering choice
+
 The paper specifies NO training loss for this stage anywhere (Sec. 4.1 /
 Eq. 1-4 are forward-computation only) -- every loss term here is this
 project's own engineering decision, justified by analogy to Eq. 10 (the

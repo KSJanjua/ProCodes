@@ -23,8 +23,8 @@ class TemporalHeadConfig:
     levels: Tuple[int, ...] = (2,)   # decoder levels to stabilize (2 = finest F_2)
     d_model: int = 128
     num_blocks: int = 2
-    # 0.25 (was 0.1 in the inert first attempt): a 1/4-side grid can correct
-    # mid-frequency flicker, not just global drift, while staying cheap.
+    # 0.25: a 1/4-side grid can correct mid-frequency flicker, not just global
+    # drift, while staying cheap.
     downsample: float = 0.25
 
 

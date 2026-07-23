@@ -1,15 +1,12 @@
 """Streaming temporal stabilizer for video depth.
 
-Architecture: the same residual ConvGRU recurrence the audit cleared of
-blame (``instancedepth/models/hdi/temporal.py`` — zero-init output, per-clip
-state reset, O(1) streaming state), with the two knobs the audit flagged
-actually turned:
-
-  * ``downsample`` 0.10 -> 0.25: the recurrence now sees a quarter-side grid,
-    so it can correct mid-frequency flicker instead of only global drift.
-  * trained with an explicit temporal loss (``losses/temporal_losses.py``) —
-    the missing gradient that made the first attempt a measured no-op
-    (TAE 0.05868 -> 0.05843).
+Architecture: a residual ConvGRU recurrence on one decoder feature level
+(shares ``ConvGRUCell`` with ``instancedepth/models/hdi/temporal.py``) with a
+zero-init output projection (exact no-op at init), per-clip state reset, and
+O(1) streaming state so it runs on arbitrarily long videos. It operates on a
+quarter-side grid (``downsample`` 0.25) so it can correct mid-frequency
+flicker, not just global scale, and is trained with an explicit temporal loss
+(``losses/temporal_losses.py``).
 
 Deliberately NOT Video-Depth-Anything's clip-attention head: that processes
 32-frame windows jointly through the DPT head (heavy in memory and latency,

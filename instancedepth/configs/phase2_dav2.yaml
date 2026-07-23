@@ -15,6 +15,7 @@ model:
   checkpoint_dir: "/home/work/intern_storage/Ayush/weights/mask2former-swin-large-coco-instance"
   allow_hub_download: false
   num_classes: 1
+  num_queries: 100   # reduced from the checkpoint's 200; ample for this dataset, halves the query budget
 
 matcher:
   cost_class: 2.0

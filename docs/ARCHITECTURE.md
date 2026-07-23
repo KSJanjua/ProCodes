@@ -126,9 +126,9 @@ flowchart TB
 
     subgraph DEC ["Depth Range Feature Decoder (Fig. 5)"]
         direction LR
-        L0["level 0 · 1/8<br/>patch 16 → attn"]:::p1
+        L0["level 0 · 1/8<br/>patch 4 → attn"]:::p1
         L1["level 1 · 1/4<br/>patch 8 → attn"]:::p1
-        L2["level 2 · 1/2<br/>patch 4 → attn"]:::p1
+        L2["level 2 · 1/2<br/>patch 16 → attn"]:::p1
         L0 -->|"top-down<br/>additive fusion"| L1 --> L2
     end
 

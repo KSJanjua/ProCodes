@@ -44,7 +44,7 @@ def _read_raw(rec: FrameRecord, cfg: DepthConfig) -> np.ndarray:
         return img
     raise FileNotFoundError(f"frame {rec.name}: no depth file available")
 
-
+# If unit is pinned ("mm"/"m"/"cm") it just returns that scale. If "auto", it samples ~5 frames, takes the median positive depth value, and reasons: real indoor scenes are 0.01–10 m, so if the median is a big number like 4500, it must be millimeters → scale 1e-3. Returns the multiplier that converts raw→meters. 
 def detect_unit_scale(seq: SequenceRecord, cfg: DepthConfig, probe_frames: int = 5) -> float:
     """Return multiplicative scale raw->meters for this sequence."""
     if cfg.unit != "auto":
@@ -67,7 +67,7 @@ def detect_unit_scale(seq: SequenceRecord, cfg: DepthConfig, probe_frames: int =
     log.info("[%s] depth unit auto-detect: median raw=%.2f -> scale=%g", seq.seq_id, med, scale)
     return scale * cfg.extra_scale
 
-
+# reads raw, multiplies by scale to get meters, then sets invalid pixels to 0
 def load_depth_meters(rec: FrameRecord, cfg: DepthConfig, scale: float) -> np.ndarray:
     """Return float32 (H, W) metric depth; invalid pixels are exactly 0."""
     d = _read_raw(rec, cfg).astype(np.float32) * scale

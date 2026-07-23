@@ -1,5 +1,7 @@
 """HolisticDepthOutput -- the single contract Phase 2/3 consume.
 
+Phase 2 and Phase 3 consume Phase 1's output. If the shape or meaning of a field silently changed, they'd misread it and produce subtly wrong results. This file defines a versioned data contract — a dataclass with a contract_version — so any mismatch fails loudly. It's a safety/interface file.
+
 ``contract_version`` is bumped whenever a field is added/removed/reshaped
 (or, as in 1.0 -> 1.1, has its *semantic* changed even though the tensor
 shape didn't), so a later phase reading a stale artifact (or calling a

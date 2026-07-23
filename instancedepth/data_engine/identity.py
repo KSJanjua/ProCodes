@@ -34,7 +34,7 @@ from .sam3_engine import FramesOut
 
 log = logging.getLogger("data_engine.identity")
 
-
+#  one person's whole life in the video: which frames they appear in and their mask each frame. Properties first_frame, last_frame, __len__ (how many frames)
 @dataclass
 class Track:
     gid: int
@@ -54,7 +54,7 @@ class Track:
     def __len__(self) -> int:
         return len(self.masks)
 
-
+# the overlap score (Section 0.2). Intersection ÷ union. Returns 0 fast when there's no overlap
 def mask_iou(a: np.ndarray, b: np.ndarray) -> float:
     inter = np.logical_and(a, b).sum(dtype=np.int64)
     if inter == 0:
@@ -62,7 +62,7 @@ def mask_iou(a: np.ndarray, b: np.ndarray) -> float:
     union = np.logical_or(a, b).sum(dtype=np.int64)
     return float(inter) / float(union)
 
-
+# flatten step. Walks every concept's local IDs and gives each a fresh global ID, building Track objects. Now "person session id 2" and "floor session id 2" won't collide.
 # --------------------------------------------------------------------------- #
 def assign_global_ids(
     per_concept: Dict[str, FramesOut], category_ids: Dict[str, int]
@@ -86,7 +86,7 @@ def assign_global_ids(
                 t.scores[fi] = obs.score
     return tracks
 
-
+# duplicate remover. If two different concepts produced masks that overlap heavily (IoU > 0.75) on the same frame, they're the same object seen twice; the one with the lower detection score loses and that frame is removed from it
 def dedup_cross_concept(tracks: Dict[int, Track], cfg: IdentityConfig) -> Dict[int, Track]:
     """Remove per-frame duplicate masks produced by different concept prompts."""
     if len({t.category for t in tracks.values()}) <= 1:
@@ -109,7 +109,7 @@ def dedup_cross_concept(tracks: Dict[int, Track], cfg: IdentityConfig) -> Dict[i
                     tracks[loser].scores.pop(fi, None)
     return {g: t for g, t in tracks.items() if len(t)}
 
-
+# It looks for a track that ends and another track of the same category that starts within max_gap=10 frames, and checks whether the dying track's last mask overlaps the newborn track's first mask (IoU > reid_iou=0.5). If yes, they're the same person — it merges them (absorbs all the newborn's frames into the older track)
 def repair_identities(tracks: Dict[int, Track], cfg: IdentityConfig) -> Dict[int, Track]:
     """Highest-IoU re-linking of fragmented tracks (paper's IoU matching)."""
     merged = True
@@ -143,7 +143,7 @@ def repair_identities(tracks: Dict[int, Track], cfg: IdentityConfig) -> Dict[int
                 merged = True
     return tracks
 
-
+# drops tracks shorter than min_track_length=5 frames (flicker/noise).
 def filter_short_tracks(tracks: Dict[int, Track], cfg: IdentityConfig) -> Dict[int, Track]:
     kept = {g: t for g, t in tracks.items() if len(t) >= cfg.min_track_length}
     if len(kept) < len(tracks):
@@ -151,7 +151,7 @@ def filter_short_tracks(tracks: Dict[int, Track], cfg: IdentityConfig) -> Dict[i
                  len(tracks) - len(kept), cfg.min_track_length)
     return kept
 
-
+# compacts the surviving IDs to 1, 2, 3, ...K
 def renumber(tracks: Dict[int, Track]) -> Dict[int, Track]:
     """Compact ids to 1..K (uint16 mask encoding requires K < 65536)."""
     out: Dict[int, Track] = {}
@@ -161,7 +161,7 @@ def renumber(tracks: Dict[int, Track]) -> Dict[int, Track]:
         out[new_gid] = t
     return out
 
-
+# runs all five in order: assign → dedup → repair → filter → renumber
 def build_tracks(
     per_concept: Dict[str, FramesOut],
     category_ids: Dict[str, int],

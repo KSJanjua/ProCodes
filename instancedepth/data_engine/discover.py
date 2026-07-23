@@ -30,7 +30,7 @@ log = logging.getLogger("data_engine.discover")
 
 _NUM_RE = re.compile(r"(\d+)")
 
-
+# makes sorting human like
 def natural_key(p: Path) -> Tuple:
     """Sort 'frame_2' before 'frame_10'."""
     return tuple(int(t) if t.isdigit() else t for t in _NUM_RE.split(p.stem))
@@ -62,14 +62,14 @@ class SequenceRecord:
     def __len__(self) -> int:
         return len(self.frames)
 
-
+# lists files in a folder with the wanted extensions, sorted by natural_key
 def _list_files(d: Path, exts: Tuple[str, ...]) -> List[Path]:
     if not d.is_dir():
         return []
     files = [p for p in d.iterdir() if p.is_file() and p.suffix.lower() in exts]
     return sorted(files, key=natural_key)
 
-
+# For each RGB file it tries to find the depth file with a matching name (tries frame_0001, frame_0001_depth, and frame_0001 with _rgb stripped). If name-matching mostly fails, it falls back to pairing by position
 def _pair_by_stem_or_index(
     rgb: List[Path], dep: List[Path], kind: str, seq_id: str
 ) -> Dict[str, Path]:
@@ -95,7 +95,7 @@ def _pair_by_stem_or_index(
         )
     return {r.stem: d for r, d in zip(rgb, dep)}
 
-
+# processes one video folder: list rgb, list npy depth, list png depth, match them, build FrameRecords, and drop any frame with no depth file
 def discover_sequence(seq_dir: Path, batch: str, layout: SequenceLayout) -> Optional[SequenceRecord]:
     rgb = _list_files(seq_dir / layout.rgb_dir, layout.rgb_exts)
     if not rgb:
@@ -116,7 +116,7 @@ def discover_sequence(seq_dir: Path, batch: str, layout: SequenceLayout) -> Opti
             log.warning("[%s] frame %s has no depth; dropped.", seq.seq_id, r.stem)
     return seq if seq.frames else None
 
-
+# finds all Batch* folders (or tolerates a flat layout), loops over every timestamp folder
 def discover_dataset(cfg: DataEngineConfig) -> List[SequenceRecord]:
     """Walk Dataset/Batch*/<timestamp>/ and return all usable sequences."""
     root = Path(cfg.dataset_root)

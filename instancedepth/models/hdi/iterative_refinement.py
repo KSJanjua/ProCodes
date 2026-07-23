@@ -1,6 +1,15 @@
 """Eq. 1-4 iterative bin refinement, across the 3 Depth Range Feature
 Decoder levels.
 
+This is the mathematical heart of Phase 1 — the paper's equations 1–4. Instead of predicting depth in one shot, it predicts a rough seed and then corrects it 3 times, each time at higher resolution. This "iterative refinement" is what makes the depth both globally correct and locally sharp. It's the single most important file in Phase 1.
+
+Receives: DepthRangeFeatures([F_0,F_1,F_2]). Produces: a RefinementTrace holding every depth D_0..D_3 and every bin output S_0,S_1,S_2.
+
+In: the 3 decoder feature maps.
+Out: RefinementTrace(depths=[D_0,D_1,D_2,D_3], bins=[S_0,S_1,S_2]). D_3 is the final depth (before the last upsample). The intermediate D_1,D_2 and all S_i are kept for deep supervision during training.
+
+This implements the paper's Eq. 1–4. We don't regress depth in one shot; we start from a seed depth and apply three coarse-to-fine correction rounds. In each round, a confidence head and an ordinal bin head produce C_i and S_i; we take their weighted sum over bins to get R_i, convert that into a metric correction E_i scaled by the bin width, and add it to the upsampled current depth to get the next depth. We keep every intermediate D_i and S_i because training uses deep supervision on them. 
+
 Indexing follows the paper's own convention exactly: D_0 is the seed (from
 `InitialDepthHead` on F_0); level i (i=0,1,2) consumes D_i and produces
 D_{i+1}. D_3 is the final holistic depth (before the last upsample to full
@@ -25,6 +34,7 @@ from instancedepth.models.hdi.bin_heads import ConfidenceHead, InitialDepthHead,
 from instancedepth.models.hdi.depth_range_decoder import DepthRangeFeatures
 
 
+#  record of everything produced during the 3 rounds. Needed because training grades not just the final depth but the intermediate ones too.
 @dataclass
 class RefinementTrace:
     """Every D_i and S_i produced during the recurrence -- deep supervision
@@ -48,7 +58,7 @@ class RefinementTrace:
     def final_bins(self) -> torch.Tensor:
         return self.bins[-1]
 
-
+# builds one InitialDepthHead and three confidence + three bin heads (one per level; not shared, because each level's features mean different things)
 class IterativeBinRefinement(nn.Module):
     def __init__(self, feat_channels: int, cfg: BinRefinementConfig) -> None:
         super().__init__()
@@ -72,7 +82,7 @@ class IterativeBinRefinement(nn.Module):
         for i in range(3):
             f_i = features.levels[i]
             target_hw = f_i.shape[-2:]
-            d_upsampled = F.interpolate(d_cur, size=target_hw, mode="bilinear", align_corners=False)
+            d_upsampled = F.interpolate(d_cur, size=target_hw, mode="bilinear", align_corners=False) # take the current depth and enlarge it to this round's resolution.
 
             c_i = self.confidence_heads[i](f_i, d_upsampled)       # Eq. 1: (B, rd, H_i, W_i), already sigmoid-ed
             s_i_logits = self.bin_heads[i](f_i)                     # ordinal bin logits, same shape

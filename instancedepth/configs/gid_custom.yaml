@@ -19,7 +19,7 @@ sam3:
   checkpoint_path: null   # e.g. "sam3/checkpoints/sam3.pt"; null = repo default
   device: "cuda"
   # One SAM3 video session tracks ONE concept; each prompt below is a session.
-  # Your data is mostly human interactions -> "person". Add e.g. "dog", "ball"
+  # Our data is mostly human interactions -> "person". Add e.g. "dog", "ball"
   # if those appear, and raise instance.num_classes in instance_depth.yaml to match.
   object_prompts: ["person"]
   ground_prompts: ["floor", "ground"]

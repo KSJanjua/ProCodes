@@ -25,13 +25,13 @@ seed: 2026
 backbone:
   name: "facebook/dinov2-large"
   checkpoint_path: "/home/work/intern_storage/Ayush/weights/dinov2_vitl14.safetensors"
-  hook_layers: [5, 14, 23]
+  hook_layers: [23, 14, 5]
   freeze: false          # requires_grad handled by freeze_spatial below
   allow_hub_download: false
 
 decoder:
   target_fractions: [0.125, 0.25, 0.5]
-  patch_kernels: [16, 8, 4]
+  patch_kernels: [4, 8, 16]
   channels_dec: 256
   channels_attn: 256
   attn_heads: 8
