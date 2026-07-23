@@ -405,7 +405,39 @@ loss is applied with deep supervision across the refinement levels.
 
 \subsection{Instance Depth-Layer Prediction}
 \label{ssec:phase2}
-\emph{[Next step.]}
+The second stage predicts, for each person, a segmentation mask, a category,
+and an instance depth layer. Following InstanceDepth~\cite{liang2025instancedepth},
+we use a Mask2Former~\cite{cheng2022mask2former} instance decoder with its own
+Swin-L backbone~\cite{liu2021swin} (kept separate from the Stage-1 encoder so it
+can be frozen during Stage-3 refinement): a fixed set of $N$ object queries is
+decoded into per-query mask logits $\mathrm{Msk}_i$ and class scores
+$\mathrm{Cls}_i$. To predict the instance depth layer $\mathrm{Dep}_i$ we attach
+a lightweight head---a small MLP on each query embedding followed by a softplus
+for positivity---mirroring the query-based class head. We use $N{=}100$ queries;
+the COCO-pretrained default of $200$ is well above the number of people per
+frame in our data (Table~\ref{tab:dataset}), and reducing it halves the decoder
+and matching budget while re-using the pretrained weights unchanged apart from
+the query embeddings.
+
+Predictions are trained by bipartite matching against the ground-truth
+instances~\cite{liang2025instancedepth,carion2020detr}. The optimal assignment
+$\hat\sigma$ minimizes a cost that augments Mask2Former's mask and class terms
+with a depth-layer term (Eq.~5--7 of~\cite{liang2025instancedepth}):
+\begin{equation}
+\label{eq:match}
+\hat\sigma=\arg\min_{\sigma}\sum_i
+\big(\lambda_m\,\mathcal{L}^{i}_{\mathrm{mask}}
+    +\lambda_c\,\mathcal{L}^{i}_{\mathrm{cls}}
+    +\lambda_d\,\mathcal{L}^{i}_{\mathrm{dep}}\big),
+\end{equation}
+where $\mathcal{L}^{i}_{\mathrm{mask}}$, $\mathcal{L}^{i}_{\mathrm{cls}}$, and
+$\mathcal{L}^{i}_{\mathrm{dep}}$ measure the disagreement between query $i$ and
+its assigned ground-truth instance $\sigma(i)$ in mask, class, and depth layer:
+a point-sampled~\cite{kirillov2020pointrend} binary cross-entropy plus Dice, a
+cross-entropy, and a smooth-$\ell_1$ regression, respectively. The same terms,
+evaluated on the matched pairs---with unmatched queries supervised toward a
+no-object class---form the training loss, and the ground-truth depth layer is
+that of Eq.~\eqref{eq:depthlayer}.
 
 \subsection{Occlusion-Aware Refinement}
 \label{ssec:phase3}
