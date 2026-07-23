@@ -579,11 +579,89 @@ Section~\ref{sec:ablation}. The system is implemented in PyTorch.
 
 \section{Evaluation Metrics}
 \label{sec:metrics}
-% Depth metrics (AbsRel, RMS, RMS-log, log10, sigma_1..3); instance metrics
-% (precision/recall/F1, mIoU, depth-layer MAE); temporal metrics (TAE, flicker
-% ratio). BLOCKED: the occlusion-slice metric definition must be stated
-% precisely (G6), and the eval protocol unified across phases (G7).
-\emph{[Written in the Metrics phase.]}
+We evaluate three aspects of the system---dense depth accuracy, instance
+quality, and temporal stability---each with standard metrics, and we then state
+precisely how the occlusion slice is measured, since that protocol governs how
+the refinement stage is read.
+
+\subsection{Depth accuracy}
+For both the dense map and the per-instance depths we report the standard
+error and accuracy metrics used in monocular depth
+evaluation~\cite{eigen2014silog}, computed over the sensor-valid pixels
+($V_t{=}1$, equivalently $D^{*}>0$). Writing $D(p)$ and $D^{*}(p)$ for the
+predicted and ground-truth depths at a valid pixel $p$ and $n$ for their count,
+\begin{align*}
+\absrel &= \tfrac1n\sum_p \frac{|D(p)-D^{*}(p)|}{D^{*}(p)}, \\
+\mathrm{RMS} &= \sqrt{\tfrac1n\sum_p (D(p)-D^{*}(p))^2}, \\
+\mathrm{RMS}_{\log} &= \sqrt{\tfrac1n\sum_p(\log D(p)-\log D^{*}(p))^2}, \\
+\log_{10} &= \tfrac1n\sum_p\big|\log_{10}\tfrac{D(p)}{D^{*}(p)}\big| ,
+\end{align*}
+together with the threshold-accuracy rates $\delta_j$, the fraction of pixels
+whose ratio $\max\!\big(D(p)/D^{*}(p),\,D^{*}(p)/D(p)\big)$ is below $1.25^{\,j}$
+for $j\in\{1,2,3\}$. Lower is better for the four error metrics and higher for
+$\delta_j$. All are computed on true metric depth in metres \emph{without}
+scale-and-shift alignment, consistent with the metric setting
+(Section~\ref{ssec:adapt}); we use $\delta$ for these rates to avoid collision
+with the sigmoid $\sigma$ of Eqs.~\eqref{eq:refine} and~\eqref{eq:eobj}.
+
+\subsection{Instance quality}
+Predicted instances are matched to the ground truth greedily by mask
+intersection-over-union (IoU): taking predictions in descending confidence
+order, each is assigned to its highest-IoU still-unclaimed ground-truth
+instance, and the match is kept if that IoU exceeds $0.5$. From the resulting
+true/false positives and negatives we report precision, recall, and their
+harmonic mean~F1, and over the matched pairs we report the mean IoU and the
+\emph{depth-layer MAE}, the mean absolute error
+$|\mathrm{Dep}_i-\mathrm{Dep}^{*}_{\sigma(i)}|$ between predicted and
+ground-truth instance depth. The depth-layer MAE is the quantity that tests
+whether the per-instance depth head (Section~\ref{ssec:phase2}) is correct, for
+which no standard segmentation metric accounts. As an externally comparable
+measure of mask quality we additionally report COCO-style mask average
+precision (AP, averaged over IoU thresholds $0.50\!:\!0.05\!:\!0.95$, with
+AP$_{50}$, AP$_{75}$, and the size-stratified AP$_{S}$/AP$_{M}$/AP$_{L}$),
+computed under the COCO protocol so that the segmentation numbers can be read
+against detection and segmentation literature.
+
+\subsection{Temporal stability}
+To quantify flicker we use the temporal alignment error (TAE) of Video Depth
+Anything~\cite{chen2025vda}: over the pixels $\mathcal{V}_t$ valid in two
+consecutive frames, the mean absolute difference between the prediction's and
+the ground truth's frame-to-frame depth change,
+\begin{equation}
+\label{eq:taemetric}
+\tae = \frac{1}{|\mathcal{V}_t|}\sum_{p\in\mathcal{V}_t}
+\big|\,\big(D_t(p)-D_{t-1}(p)\big)-\big(D^{*}_t(p)-D^{*}_{t-1}(p)\big)\,\big| .
+\end{equation}
+TAE vanishes when the prediction moves exactly as the ground truth does and is
+unaffected by a constant per-pixel bias, so it isolates spurious temporal
+change. For context we also report the mean frame-to-frame magnitudes
+$\overline{|\Delta D|}$ and $\overline{|\Delta D^{*}|}$ and their ratio, the
+\emph{flicker ratio} $\overline{|\Delta D|}/\overline{|\Delta D^{*}|}$: a value
+near~$1$ means prediction and ground truth move by the same amount on average,
+above~$1$ indicates excess motion (flicker), and below~$1$ indicates
+over-smoothing. TAE and the flicker ratio are computed on raw metric depth,
+whereas the training objective of Eq.~\eqref{eq:tgm} matches \emph{log}-depth
+changes; the two share intent but are not identical, and we report the metric
+form.
+
+\subsection{Occlusion-slice protocol}
+\label{ssec:occprotocol}
+Refinement acts only where people overlap, so we report depth on the occlusion
+slice separately and define it precisely. A test frame enters the slice if at
+least two ground-truth instances have overlapping bounding boxes, measured by
+intersection-over-minimum-area above $0.1$; because the masks are modal and
+mutually disjoint (Section~\ref{sec:problem}) their pairwise \emph{mask} overlap
+is near zero regardless of occlusion, so this box-overlap test---not mask
+intersection---is what identifies genuine occluder/occludee pairs. On those
+frames the depth metrics above are computed over the \emph{union of
+ground-truth instance pixels}---the people---rather than the whole frame. This
+is a deliberately different pixel population from the overall metric: the
+occlusion-slice numbers measure error on foreground people in occlusion frames,
+whereas the overall numbers measure error over the entire scene. The two are
+therefore \emph{not} directly comparable, and we do not compare them; the
+meaningful comparison on the slice is between the base and the refined depths,
+which are evaluated on identically the same pixels and so isolate the effect of
+the refinement stage.
 
 \section{Results}
 \label{sec:results}
