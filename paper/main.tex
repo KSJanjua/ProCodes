@@ -665,10 +665,102 @@ the refinement stage.
 
 \section{Results}
 \label{sec:results}
-% Main quantitative tables + qualitative figures. BLOCKED: G0 (numbers must
-% come from code that matches the manuscript), G2 (significance), G4 (a fair
-% external baseline). No numbers are written until these hold.
-\emph{[Written in the Results phase.]}
+All numbers are on the held-out test split (Table~\ref{tab:dataset}); the
+occlusion slice is the $3{,}083$ test frames with overlapping instances
+(Section~\ref{ssec:occprotocol}). We report each stage's measured performance
+and describe the change it produces. We characterize improvements as consistent
+relative reductions rather than statistically tested effects, and make no claim
+of state-of-the-art performance (Section~\ref{sec:limitations}).
+
+\subsection{Dense depth and temporal consistency}
+Table~\ref{tab:depth} reports the holistic (Stage-1) metric depth under
+streaming evaluation, with and without the temporal stabilizer
+(Section~\ref{ssec:temporal}). The per-frame model reaches an absolute relative
+error of $0.078$, with $93.8\%$ of valid pixels inside the $\delta_1$ threshold.
+Adding the temporal stabilizer---the \emph{same} spatial weights plus a
+zero-initialized recurrent module, so any change is attributable to the temporal
+training rather than to a different backbone---reduces AbsRel to $0.072$ ($6.9\%$
+relative) and lowers the temporal alignment error from $0.0558$ to $0.0547$. The
+prediction's mean frame-to-frame change also falls (from $0.0574$ to $0.0557$),
+which moves the flicker ratio from $0.945$ to $0.918$; because this takes it
+slightly further below one, we read the reduced TAE---not the flicker ratio---as
+the evidence of improved temporal behaviour (Section~\ref{sec:metrics}).
+
+\begin{table*}[t]
+\centering
+\caption{Holistic metric depth on the full test split (streaming evaluation),
+without and with the temporal stabilizer. Both rows use identical Stage-1
+weights; the stabilizer is zero-initialized, so its effect is attributable to
+temporal training. Best per column in \textbf{bold}.}
+\label{tab:depth}
+\begin{tabular}{lcccccccc}
+\toprule
+Model & AbsRel$\downarrow$ & RMS$\downarrow$ & RMS-log$\downarrow$ &
+$\log_{10}\downarrow$ & $\delta_1\uparrow$ & $\delta_2\uparrow$ &
+$\delta_3\uparrow$ & TAE$\downarrow$ \\
+\midrule
+Per-frame (Stage 1)      & $0.0778$ & $0.380$ & $0.106$ & $0.032$ & $0.938$ & $0.982$ & $0.996$ & $0.0558$ \\
+\;\;+ Temporal stabilizer & $\mathbf{0.0724}$ & $\mathbf{0.374}$ & $\mathbf{0.102}$ & $\mathbf{0.030}$ & $\mathbf{0.941}$ & $\mathbf{0.983}$ & $0.996$ & $\mathbf{0.0547}$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Instance segmentation and depth layers}
+Table~\ref{tab:instance} reports Stage-2 instance quality. Measured against the
+automatically generated instance labels (Section~\ref{sec:dataset}), the decoder
+attains an F1 of $0.94$ at a mask-IoU threshold of $0.5$ and a mean matched-mask
+IoU of $0.98$; the per-instance depth-layer MAE is $0.060\,$m overall and
+$0.067\,$m on the occlusion slice, where instances overlap. Because these labels
+come from the annotation pipeline rather than from human labelling, the
+depth-layer MAE should be read as agreement with automatically generated depth
+layers; a manually verified assessment is left to future work
+(Section~\ref{sec:limitations}).
+
+\begin{table}[t]
+\centering
+\caption{Stage-2 instance quality (greedy mask-IoU matching at $0.5$), overall
+and on the occlusion slice. Depth-layer MAE is against automatically generated
+labels (Section~\ref{sec:dataset}).}
+\label{tab:instance}
+\begin{tabular}{lccccc}
+\toprule
+Split & P$\uparrow$ & R$\uparrow$ & F1$\uparrow$ & mIoU$\uparrow$ & depth-MAE (m)$\downarrow$ \\
+\midrule
+Overall         & $0.945$ & $0.941$ & $0.943$ & $0.979$ & $0.060$ \\
+Occlusion slice & $0.952$ & $0.909$ & $0.930$ & $0.965$ & $0.067$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Occlusion-aware refinement}
+On the whole frame, the refined depth is unchanged from the frozen base
+(AbsRel $0.078$ for both) by construction: the Stage-1 branch is frozen and the
+stage is identity-initialized, so it cannot move depth away from the paired
+instances (Section~\ref{ssec:phase3}). Table~\ref{tab:refine} therefore reports
+the occlusion slice, restricted to instance pixels
+(Section~\ref{ssec:occprotocol}), where refinement acts. There it reduces AbsRel
+from $0.0592$ to $0.0554$---a $6.5\%$ relative reduction---while RMS and
+$\delta_1$ are essentially unchanged. The stage thus produces a modest,
+consistent improvement in occluded-instance depth at no cost to the rest of the
+frame; whether this gain is attributable specifically to the bounded
+pair-attention head, and whether it exceeds per-sequence variance, are examined
+and discussed in Sections~\ref{sec:ablation} and~\ref{sec:limitations}.
+
+\begin{table}[t]
+\centering
+\caption{Stage-3 occlusion-aware refinement on the occlusion slice
+(instance pixels). Whole-frame depth is unchanged ($0.078$ AbsRel, base and
+refined), so only the slice is shown. Best per column in \textbf{bold}.}
+\label{tab:refine}
+\begin{tabular}{lccc}
+\toprule
+Occlusion slice & AbsRel$\downarrow$ & RMS$\downarrow$ & $\delta_1\uparrow$ \\
+\midrule
+Base (frozen Stage-1) & $0.0592$ & $0.204$ & $0.986$ \\
+\;\;+ Refinement       & $\mathbf{0.0554}$ & $\mathbf{0.203}$ & $\mathbf{0.986}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Ablation Studies}
 \label{sec:ablation}
@@ -722,6 +814,15 @@ external instance-depth benchmark and make no claim of cross-dataset generality
 or state-of-the-art performance. The lack of a standard benchmark for
 single-sensor, metric, occlusion-aware instance depth is part of what motivates
 the dataset, but it does mean our conclusions are specific to this data.
+
+\smallskip\noindent\textbf{Untested statistical significance.}
+We report the refinement and temporal improvements as measured relative
+reductions and describe them as modest and consistent, not significant. We have
+not yet run a per-sequence significance analysis---the appropriate test, since
+frames within a video are correlated and the $61$ test sequences are the
+independent unit---so we do not claim the gains exceed per-sequence variance.
+The paired bootstrap and sign-test tooling is in place, and this analysis is
+immediate future work.
 
 \smallskip\noindent\textbf{Metric caveat.}
 The flicker ratio compares the average frame-to-frame motion of the prediction
