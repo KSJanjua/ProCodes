@@ -1,100 +1,72 @@
 %==============================================================================
-%  ICVGIP-2026 SUBMISSION -- MANUSCRIPT SCAFFOLD (finalized, framing-agnostic)
+%  ICVGIP-2026 SUBMISSION -- main manuscript (official ACM/acmart ICVGIP template).
 %------------------------------------------------------------------------------
-%  This file contains ONLY the parts that are stable regardless of the two
-%  open decisions from Phase-1 planning:
-%     (G0) how the code/results desync is resolved (re-run vs revert), and
-%     (framing) dataset+benchmark vs adaptation+extension vs method paper.
+%  All acmart support files are bundled in this folder (from the official
+%  ICVGIP-2026 template zip), so this compiles with NO package installation:
+%      pdflatex main.tex ; bibtex main ; pdflatex main.tex ; pdflatex main.tex
+%  (or: latexmk -pdf main.tex).
 %
-%  It therefore contains NO results, NO metrics, NO contribution claims, and
-%  NO novelty statements -- those are written section-by-section, each only
-%  after its supporting experiments/evidence exist. Section bodies are
-%  deliberately empty placeholders.
+%  * Keep `review=true` for the review submission (per the official template).
+%    For camera-ready, remove it and fill \acmDOI / \acmISBN.
+%  * Replace "Submission Id XYZW" with your ICVGIP-2026 submission id.
 %
-%  FORMAT NOTE: recent ICVGIP editions use the ACM primary article template
-%  (acmart, "sigconf"). CONFIRM against the official ICVGIP-2026 author kit /
-%  CFP before camera-ready and swap \documentclass if 2026 differs. The
-%  "anonymous,review" options assume double-blind review (ICVGIP's usual
-%  policy) -- remove "anonymous" for the camera-ready.
+%  Scientific-honesty policy (unchanged): NO results/metrics/contribution-outcome
+%  claims are written until their supporting evidence exists (gates G0--G8).
 %==============================================================================
 
-\documentclass[sigconf,anonymous,review]{acmart}
+\documentclass[sigconf, review=true]{acmart}
+%Do not remove the review=true option for papers submitted for review to ICVGIP2026.
 
-%---- ACM boilerplate / conference metadata -----------------------------------
-%  Fill DOI / ISBN / exact dates from the official ICVGIP-2026 author kit.
-\setcopyright{acmlicensed}
-\copyrightyear{2026}
+\setcopyright{rightsretained}
+
+\acmConference[ICVGIP2026]{17th Indian Conference on Computer Vision, Graphics and Image Processing}{December 21-25, 2026}{Kolkata, India}
 \acmYear{2026}
-\acmDOI{XXXXXXX.XXXXXXX}                       % TODO: from author kit
-\acmConference[ICVGIP '26]{Indian Conference on Computer Vision,
-  Graphics and Image Processing}{December 2026}{India}
-\acmBooktitle{Indian Conference on Computer Vision, Graphics and Image
-  Processing (ICVGIP '26), December 2026, India}
-\acmISBN{978-x-xxxx-xxxx-x/26/12}              % TODO: from author kit
+\copyrightyear{2026}
 \acmPrice{15.00}
+% \acmDOI{...}    % camera-ready only
+% \acmISBN{...}   % camera-ready only
 
-%---- packages ----------------------------------------------------------------
-%  acmart already loads graphicx, amsmath, booktabs, hyperref, etc.
-\usepackage{subcaption}
-\usepackage{multirow}
-\usepackage{amssymb}
-
-%---- convenience macros ------------------------------------------------------
-\newcommand{\datasetname}{\textsc{[DatasetName]}} % TODO: name once dataset framing is fixed
-\newcommand{\absrel}{\text{AbsRel}}
-\newcommand{\tae}{\text{TAE}}
+% convenience macros
+\newcommand{\absrel}{\mathrm{AbsRel}}
+\newcommand{\tae}{\mathrm{TAE}}
 
 \begin{document}
 
-%------------------------------------------------------------------------------
-%  TITLE  (PROVISIONAL, framing-agnostic working title -- finalize with framing)
-%------------------------------------------------------------------------------
 \title{Occlusion-Aware Instance-Level Video Depth on a Single RGB-D Sensor:
        Adaptations and a Temporal-Consistency Extension}
 %  Framing: ADAPTATION + EXTENSION (locked).
-%  Alt: "Adapting Occlusion-Aware Instance-Level Video Depth to Single-Sensor
-%    RGB-D Human Activity"
-%  Alt: "Single-Sensor Occlusion-Aware Instance-Level Video Depth: Adaptation
-%    and a Temporal-Consistency Extension"
 
-%------------------------------------------------------------------------------
-%  AUTHORS  (hidden under the "anonymous" option during review)
-%------------------------------------------------------------------------------
-\author{Anonymous Author(s)}
+\author{Submission Id XYZW}   % <-- replace XYZW with your ICVGIP-2026 submission id
 \affiliation{%
-  \institution{Submission under double-blind review}
+  \institution{Anonymous (submitted for review)}
   \country{}
 }
+\renewcommand{\shortauthors}{}
 
-%------------------------------------------------------------------------------
-%  ABSTRACT  (written in Phase-2, only after the contribution set is locked)
-%------------------------------------------------------------------------------
 \begin{abstract}
-\emph{[Abstract -- drafted in Phase-2 of the writing process, after the
-contribution set is locked. Intentionally left blank so no unverified claim
-enters the manuscript prematurely.]}
+\emph{[Abstract -- written after the contribution set and results are locked.
+Intentionally left blank so no unverified claim enters the manuscript
+prematurely.]}
 \end{abstract}
 
-%------------------------------------------------------------------------------
-%  CCS + KEYWORDS  (framing-agnostic; refine at camera-ready via the ACM CCS tool)
-%------------------------------------------------------------------------------
+% CCS concepts -- regenerate at camera-ready via https://dl.acm.org/ccs.cfm
 \begin{CCSXML}
 <ccs2012>
-  <concept>
-    <concept_id>10010147.10010178.10010224.10010225.10010228</concept_id>
-    <concept_desc>Computing methodologies~Reconstruction</concept_desc>
-    <concept_significance>500</concept_significance>
-  </concept>
-  <concept>
-    <concept_id>10010147.10010178.10010224.10010240.10010242</concept_id>
-    <concept_desc>Computing methodologies~Scene understanding</concept_desc>
-    <concept_significance>500</concept_significance>
-  </concept>
-  <concept>
-    <concept_id>10010147.10010178.10010224.10010240.10010241</concept_id>
-    <concept_desc>Computing methodologies~Image segmentation</concept_desc>
-    <concept_significance>300</concept_significance>
-  </concept>
+ <concept>
+  <concept_id>10010147.10010178.10010224.10010225.10010228</concept_id>
+  <concept_desc>Computing methodologies~Reconstruction</concept_desc>
+  <concept_significance>500</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>10010147.10010178.10010224.10010240.10010242</concept_id>
+  <concept_desc>Computing methodologies~Scene understanding</concept_desc>
+  <concept_significance>500</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>10010147.10010178.10010224.10010240.10010241</concept_id>
+  <concept_desc>Computing methodologies~Image segmentation</concept_desc>
+  <concept_significance>300</concept_significance>
+ </concept>
 </ccs2012>
 \end{CCSXML}
 \ccsdesc[500]{Computing methodologies~Reconstruction}
@@ -102,30 +74,70 @@ enters the manuscript prematurely.]}
 \ccsdesc[300]{Computing methodologies~Image segmentation}
 
 \keywords{monocular depth estimation, metric depth, instance segmentation,
-  occlusion reasoning, video depth consistency, RGB-D dataset}
+  occlusion reasoning, video depth consistency, RGB-D}
 
 \maketitle
 
 %==============================================================================
-%  SECTION SKELETON
-%  Each body is written in its own drafting phase, only after its evidence
-%  exists. The comment under each header records what it will contain and
-%  which open gate (G0--G8, from Phase-1 planning) currently blocks it.
+%  BODY
 %==============================================================================
 
 \section{Introduction}
 \label{sec:intro}
-% Problem, setting (single-sensor RGB-D, human groups, occlusion), gap, and a
-% contribution list. BLOCKED: contribution list depends on framing + G0.
-\emph{[Written in the Introduction phase.]}
+Estimating per-pixel depth from images underpins many downstream tasks---scene
+understanding, robotics, and augmented reality---and modern monocular estimators
+produce high-quality dense depth from a single
+image~\cite{ranftl2021dpt,yang2024depthanythingv2}. Scenes containing several
+interacting people are, however, particularly difficult: where one person
+occludes another it is ambiguous which surface a pixel belongs to, and a
+per-pixel estimator has no explicit notion of \emph{which} person is where.
+Reasoning at the level of \emph{instances}---predicting, for each person, both a
+segmentation and a depth---and enforcing that occluders lie in front of the
+people they occlude is therefore attractive for group scenes.
+
+InstanceDepth~\cite{liang2025instancedepth} recently formalized this as
+instance-level, occlusion-aware depth and introduced a three-stage architecture
+for it. Its design targets a particular acquisition setting; deploying the same
+idea on a \emph{single calibrated RGB-D sensor} recording everyday human
+activity---the setting of this paper---changes the problem in three concrete
+ways (Section~\ref{sec:problem}): supervision is truly metric but available only
+on \emph{visible} surfaces; the ground-truth instance masks are \emph{modal and
+mutually disjoint}, so two occluding people have almost no mask overlap; and,
+because depth is predicted per frame, the depth of static structure
+\emph{flickers} over time. Each of these breaks an assumption that
+occlusion-aware instance-depth methods---and per-frame depth methods
+generally---were built on.
+
+We study how to make occlusion-aware instance depth work in this single-sensor
+regime. We reproduce the three-stage InstanceDepth pipeline, adapt each stage to
+metric, visible-only, modal-mask supervision, and add a streaming module that
+suppresses temporal flicker. To support the study we assemble a single-sensor
+RGB-D corpus of human-activity video and annotate it automatically with instance
+masks, temporally consistent identities, and per-instance depth layers.
+
+\smallskip\noindent\textbf{Contributions.}
+\begin{itemize}
+  \item \textbf{Single-sensor adaptations} of occlusion-aware instance depth:
+    metric (scale-variant) depth supervision in place of scale-invariant
+    objectives; bounding-box occlusion pairing suited to modal, disjoint masks;
+    and visible-only supervision of the occlusion refinement. We further adopt a
+    frozen-base refinement that is non-degrading by construction
+    (Section~\ref{ssec:adapt}).
+  \item A \textbf{streaming temporal-consistency extension}---a lightweight
+    recurrent depth stabilizer trained with a temporal-gradient-matching
+    objective---added to the otherwise per-frame pipeline
+    (Section~\ref{ssec:temporal}).
+  \item A \textbf{bounded pair-attention refinement head}, which we describe and
+    study against the original relation-reasoning head
+    (Sections~\ref{ssec:phase3} and~\ref{sec:ablation}).
+  \item A \textbf{single-sensor RGB-D human-activity corpus} with an automatic
+    instance and depth-layer annotation pipeline (Section~\ref{sec:dataset}).
+\end{itemize}
+We evaluate each component on this corpus and analyze where it helps and where
+it does not (Sections~\ref{sec:results} and~\ref{sec:ablation}).
 
 \section{Related Work}
 \label{sec:related}
-% Monocular / metric depth (DPT, Depth Anything V2); video depth consistency
-% (Video Depth Anything); self-supervised features (DINOv2); instance
-% segmentation (Mask2Former) and video instance segmentation (Mask2Former-VIS,
-% MinVIS); promptable segmentation + tracking (SAM, SAM 2, DEVA); and the
-% instance-level occlusion-aware depth method this work builds on.
 
 \paragraph{Monocular and metric depth estimation.}
 Learning-based monocular depth estimation was popularized by Eigen et
@@ -243,9 +255,6 @@ extension described in Section~\ref{sec:method}.
 
 \section{Dataset and Annotation Pipeline}
 \label{sec:dataset}
-% The single-sensor RGB-D human-activity capture, statistics, and the automatic
-% instance/depth-layer annotation pipeline. BLOCKED: any quality/quantitative
-% claim requires G1 (manual annotation validation).
 
 \subsection{Acquisition}
 Our data are captured with a single calibrated ZED stereo RGB-D sensor in
@@ -267,14 +276,14 @@ $3{,}083$ contain at least one pair of overlapping instances---the
 (\emph{person}), video-level train/test split.}
 \label{tab:dataset}
 \begin{tabular}{lccc}
-\toprule
+\hline
 Split & Sequences & Frames & Occlusion frames \\
-\midrule
+\hline
 Train & $245$ & $39{,}923$ & --- \\
 Test  & $61$  & $10{,}400$ & $3{,}083$ \\
-\midrule
+\hline
 Total & $306$ & $50{,}323$ & --- \\
-\bottomrule
+\hline
 \end{tabular}
 \end{table}
 
@@ -326,7 +335,45 @@ the $4$--$6$, $6$--$8$, and $8$--$10\,$m ranges respectively).
 % aware refinement; single-sensor adaptations (metric SigLog, box-IoU pairing,
 % visible-only supervision); temporal-consistency extension. BLOCKED: which
 % components are claimed as contributions depends on G3/G8 + framing.
-\emph{[Written in the Methodology phase.]}
+
+\subsection{Overview}
+Our system follows the three-stage design of
+InstanceDepth~\cite{liang2025instancedepth}, which we reproduce and adapt to the
+single-sensor metric setting of Section~\ref{sec:problem} and extend with a
+temporal-consistency module. Given a frame $I_t$: Stage~1
+(Section~\ref{ssec:phase1}) predicts a dense metric depth map and multi-scale
+depth features; Stage~2 (Section~\ref{ssec:phase2}) predicts a set of person
+instances, each with a mask, a category, and a depth layer; and Stage~3
+(Section~\ref{ssec:phase3}) identifies pairs of overlapping instances and
+refines their depths so that occluder and occludee are ordered consistently.
+Throughout, we retain the metric supervision afforded by the calibrated sensor
+and adapt the occlusion machinery to modal, mutually-disjoint masks
+(Section~\ref{ssec:adapt}); an optional streaming module then enforces temporal
+consistency across frames (Section~\ref{ssec:temporal}). We describe the
+reproduced components only to the level needed to make our adaptations precise,
+citing InstanceDepth for full derivations, and state the components we introduce
+explicitly as such.
+% TODO(figure): system-overview figure (Fig. 1).
+
+\subsection{Holistic Depth Initialization}
+\label{ssec:phase1}
+\emph{[Next step.]}
+
+\subsection{Instance Depth-Layer Prediction}
+\label{ssec:phase2}
+\emph{[Next step.]}
+
+\subsection{Occlusion-Aware Refinement}
+\label{ssec:phase3}
+\emph{[Next step.]}
+
+\subsection{Single-Sensor Adaptations}
+\label{ssec:adapt}
+\emph{[Next step.]}
+
+\subsection{Temporal-Consistency Extension}
+\label{ssec:temporal}
+\emph{[Next step.]}
 
 \section{Experimental Setup}
 \label{sec:setup}
@@ -370,10 +417,6 @@ the $4$--$6$, $6$--$8$, and $8$--$10\,$m ranges respectively).
 \section{Conclusion}
 \label{sec:conclusion}
 \emph{[Written in the Conclusion phase.]}
-
-%---- acknowledgements: REMOVE for anonymous review; restore for camera-ready --
-%\begin{acks}
-%\end{acks}
 
 %------------------------------------------------------------------------------
 %  REFERENCES
