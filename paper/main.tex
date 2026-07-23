@@ -46,9 +46,25 @@
 \renewcommand{\shortauthors}{}
 
 \begin{abstract}
-\emph{[Abstract -- written after the contribution set and results are locked.
-Intentionally left blank so no unverified claim enters the manuscript
-prematurely.]}
+Instance-level, occlusion-aware depth predicts, for each person in a scene, a
+segmentation together with a depth that stays consistent where bodies overlap.
+We study this task in a single-sensor regime---human-activity video from one
+calibrated RGB-D camera---which supplies true metric depth but only on visible
+surfaces, provides modal and mutually disjoint instance masks, and yields
+per-frame depth that flickers over time. We reproduce the three-stage
+InstanceDepth pipeline and adapt each stage to this setting: a metric
+(scale-variant) objective in place of scale-invariant losses, bounding-box
+occlusion pairing suited to disjoint masks, and a visible-only, frozen-base
+refinement that cannot degrade the dense depth map by construction. We further
+add a streaming recurrent stabilizer trained with a temporal-gradient-matching
+loss. To support the study we assemble a single-sensor RGB-D corpus of $306$
+human-activity sequences, annotated automatically with instance masks,
+identities, and per-instance depth layers. On a held-out test split the
+adaptations train stably to $0.078$ absolute relative error; occlusion
+refinement improves occluded-instance depth while leaving whole-frame depth
+unchanged; and the temporal stabilizer improves per-frame accuracy and reduces
+flicker. We report these as modest, consistent effects, analyse where each
+component helps and where it does not, and make no state-of-the-art claim.
 \end{abstract}
 
 % CCS concepts -- regenerate at camera-ready via https://dl.acm.org/ccs.cfm
@@ -764,14 +780,93 @@ Base (frozen Stage-1) & $0.0592$ & $0.204$ & $0.986$ \\
 
 \section{Ablation Studies}
 \label{sec:ablation}
-% Encoder (vanilla DINOv2 vs Depth-Anything-V2); regression loss (SigLog vs
-% berHu); occlusion head (vanilla vs proposed); temporal loss on/off;
-% profile ablations. BLOCKED: G3 (head attribution), G8 (temporal isolation).
-\emph{[Written in the Ablation phase.]}
+We ablate the components whose effect can be isolated on our runs, and mark
+those that require an additional controlled run rather than report a confounded
+comparison.
+
+\subsection{Regression objective}
+Because the calibrated sensor supplies metric depth, Stage~1 is trained with a
+metric (scale-variant) SigLog objective (Section~\ref{ssec:phase1}). Replacing
+it with the reverse-Huber (berHu) loss~\cite{laina2016berhu}, with the encoder
+and every other setting fixed, raises AbsRel from $0.078$ to $0.086$ and lowers
+$\delta_1$ from $0.938$ to $0.927$ (Table~\ref{tab:ablation_loss}); we therefore
+retain SigLog.
+
+\begin{table}[t]
+\centering
+\caption{Regression-loss ablation on the full test split, with the
+Depth-Anything-V2 encoder and all other settings fixed. Best per column in
+\textbf{bold}.}
+\label{tab:ablation_loss}
+\begin{tabular}{lcccc}
+\toprule
+Loss & AbsRel$\downarrow$ & RMS$\downarrow$ & $\log_{10}\downarrow$ & $\delta_1\uparrow$ \\
+\midrule
+SigLog (ours) & $\mathbf{0.078}$ & $\mathbf{0.381}$ & $\mathbf{0.032}$ & $\mathbf{0.938}$ \\
+berHu         & $0.086$ & $0.411$ & $0.036$ & $0.927$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Component contributions}
+The two components added to the per-frame pipeline are ablated by the on/off
+comparisons already reported in Section~\ref{sec:results}. Occlusion refinement
+(Table~\ref{tab:refine}) improves occluded-instance depth
+($0.0592\!\rightarrow\!0.0554$ AbsRel on the occlusion slice) while leaving
+whole-frame depth unchanged, and the temporal stabilizer (Table~\ref{tab:depth}),
+evaluated under identical spatial weights with a zero-initialized module,
+reduces both AbsRel ($0.0778\!\rightarrow\!0.0724$) and the temporal alignment
+error. Each is a positive but modest contribution in isolation.
+
+\subsection{Ablations requiring a controlled run}
+Two comparisons are not yet supported by a controlled run, and we deliberately
+report no numbers for them rather than draw a conclusion from confounded runs.
+\emph{(i)~Encoder.} A clean Depth-Anything-V2-versus-vanilla-DINOv2 comparison
+requires the two encoders to match in every other respect; the committed runs
+that differ in encoder also differ in auxiliary-loss weights and lie within
+$0.5\%$ AbsRel of each other, so no encoder conclusion is drawn here.
+\emph{(ii)~Occlusion head.} Whether the occlusion-slice gain is attributable
+specifically to the bounded pair-attention head (Section~\ref{ssec:phase3})
+rather than to the original relation head requires a frozen-base run of the
+original head under the identical protocol, matched per sequence.
+\emph{[To be added: a controlled head-attribution ablation and a controlled
+encoder ablation, each with the per-sequence significance test of
+Section~\ref{sec:limitations}.]}
 
 \section{Discussion}
 \label{sec:discussion}
-\emph{[Written in the Discussion phase.]}
+Our results support a narrow but concrete claim: the three-stage,
+occlusion-aware instance-depth recipe transfers to a single calibrated RGB-D
+sensor once its supervision is made metric, visible-only, and box-based. The
+metric SigLog objective trains stably to $0.078$ AbsRel
+(Table~\ref{tab:depth}); box-IoU pairing recovers a populated occlusion slice
+that mask-IoU pairing would leave empty on modal, disjoint masks; and the
+frozen-base, visible-only refinement improves occluded-instance depth without
+altering the rest of the frame (Table~\ref{tab:refine}).
+
+The improvements are deliberately modest, and the setting explains why. The base
+depth is already strong on people---person pixels are near-range and
+well-modelled, which is why the occlusion-slice error ($0.059$) sits below the
+whole-frame error ($0.078$)---so refinement operates in a regime with little
+headroom, on the minority of pixels where instances actually overlap. The
+temporal stabilizer likewise acts on a per-frame model whose flicker is already
+small; it lowers the temporal alignment error and, as a side effect of
+smoothing, improves per-frame accuracy. These are the gains one expects from
+targeted, non-degrading additions rather than from a redesign, and we report
+them as such.
+
+We therefore position this work as an adaptation-and-extension study, not a new
+method or a state-of-the-art result. Its value is threefold: a single-sensor
+RGB-D corpus with automatic instance and depth-layer annotation; evidence that
+occlusion-aware instance depth is trainable, and non-degrading, on metric
+visible-only data; and a lightweight temporal extension that reduces flicker.
+Several directions would strengthen the claims---a per-sequence significance
+analysis to move the gains from ``consistent'' to ``tested''
+(Section~\ref{sec:limitations}); a controlled attribution of the occlusion gain
+to the bounded pair-attention head; a scale-aligned external baseline; and a
+manual annotation-quality audit---alongside joint spatio-temporal training and
+amodal supervision to reach the depth behind occluders that a single sensor
+cannot observe.
 
 \section{Limitations}
 \label{sec:limitations}
@@ -840,7 +935,22 @@ future work.
 
 \section{Conclusion}
 \label{sec:conclusion}
-\emph{[Written in the Conclusion phase.]}
+We studied instance-level, occlusion-aware metric depth for human-activity video
+captured by a single calibrated RGB-D sensor. We reproduced the three-stage
+InstanceDepth pipeline and adapted each stage to metric, visible-only,
+modal-mask supervision---a metric SigLog objective, bounding-box occlusion
+pairing, and a frozen-base refinement that is non-degrading by
+construction---and added a streaming temporal-consistency stabilizer trained
+with a temporal-gradient-matching loss. To support the study we assembled a
+single-sensor RGB-D corpus of $306$ human-activity sequences with automatic
+instance, identity, and depth-layer annotation. On a held-out test split the
+adaptations train stably, occlusion refinement modestly and consistently
+improves occluded-instance depth while leaving whole-frame depth unchanged, and
+the temporal stabilizer improves per-frame accuracy and reduces flicker. We
+frame these as modest, consistent effects rather than tested improvements and
+make no state-of-the-art claim. Establishing statistical significance, a
+controlled attribution of the refinement gain, a scale-aligned external
+baseline, and a manual annotation audit are the immediate next steps.
 
 %------------------------------------------------------------------------------
 %  REFERENCES
