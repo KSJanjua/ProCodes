@@ -49,12 +49,13 @@
 %------------------------------------------------------------------------------
 %  TITLE  (PROVISIONAL, framing-agnostic working title -- finalize with framing)
 %------------------------------------------------------------------------------
-\title{Occlusion-Aware Instance-Level Video Depth for Human Groups
-       on a Single-Sensor RGB-D Dataset}
-%  Alt (dataset framing): "A Single-Sensor RGB-D Benchmark for Occlusion-Aware
-%    Instance-Level Video Depth of Human Groups"
-%  Alt (adaptation framing): "Adapting Occlusion-Aware Instance-Level Video
-%    Depth to Single-Sensor RGB-D Human Activity"
+\title{Occlusion-Aware Instance-Level Video Depth on a Single RGB-D Sensor:
+       Adaptations and a Temporal-Consistency Extension}
+%  Framing: ADAPTATION + EXTENSION (locked).
+%  Alt: "Adapting Occlusion-Aware Instance-Level Video Depth to Single-Sensor
+%    RGB-D Human Activity"
+%  Alt: "Single-Sensor Occlusion-Aware Instance-Level Video Depth: Adaptation
+%    and a Temporal-Consistency Extension"
 
 %------------------------------------------------------------------------------
 %  AUTHORS  (hidden under the "anonymous" option during review)
@@ -177,10 +178,9 @@ promptable concept-level video segmenter in this lineage to annotate our
 dataset automatically, replacing manual labeling of instance masks and track
 identities.
 
-% TODO (dataset framing): add a "depth / RGB-D datasets" paragraph positioning
-% the gap our dataset fills (e.g. indoor RGB-D and driving depth benchmarks,
-% and any human-group depth datasets). Deferred until verified dataset
-% citations are added to references.bib -- no fabricated citations.
+% (Optional under the adaptation+extension framing) a brief mention of RGB-D
+% depth benchmarks could contextualize the single-sensor setting; deferred
+% until verified dataset citations are added -- no fabricated citations.
 
 \paragraph{Instance-level occlusion-aware depth.}
 Closest to our work, InstanceDepth~\cite{liang2025instancedepth} predicts
@@ -193,6 +193,53 @@ human-activity scenes---which changes the available supervision (metric depth
 on visible surfaces only, with modal and mutually disjoint instance masks) and
 motivates the dataset, single-sensor adaptations, and temporal extension we
 present.
+
+\section{Problem Formulation}
+\label{sec:problem}
+We consider instance-level, occlusion-aware \emph{metric} depth estimation for
+human-activity video acquired by a \emph{single} calibrated RGB-D sensor. A
+video is a sequence of RGB frames $\{I_t\}_{t=1}^{T}$, $I_t\in\mathbb{R}^{H\times
+W\times 3}$. During training each frame is paired with a metric depth map
+$D^{*}_t\in\mathbb{R}^{H\times W}$ from the sensor and a validity mask
+$V_t\in\{0,1\}^{H\times W}$ that is zero where the sensor returns no measurement;
+per-instance modal masks $\{M^{*}_{t,k}\}_k$ with temporally consistent track
+identities; and, for each instance, a ground-truth depth layer
+$\mathrm{Dep}^{*}_{t,k}$ defined as the mean metric depth over that instance's
+\emph{visible} pixels,
+\begin{equation}
+\label{eq:depthlayer}
+\mathrm{Dep}^{*}_{t,k}=
+\frac{\sum_{p} M^{*}_{t,k}(p)\,V_t(p)\,D^{*}_t(p)}
+     {\sum_{p} M^{*}_{t,k}(p)\,V_t(p)}.
+\end{equation}
+
+Given only $\{I_t\}$ at inference, the task is to predict, for every frame $t$:
+(i) a dense metric depth map $D_t$; (ii) a set of instances, each with a mask
+$M_{t,k}$, a category, and an instance depth layer $\mathrm{Dep}_{t,k}$; and
+(iii) occlusion-corrected instance depths $\hat{\mathrm{Dep}}_{t,k}$ that respect
+the geometric ordering of overlapping instances (an occluder is nearer than the
+instance it occludes). Predictions should additionally be temporally stable:
+the frame-to-frame change of $D_t$ should track that of the ground truth rather
+than exhibit spurious flicker.
+
+Three properties of the single-sensor setting shape the problem and distinguish
+it from the multi-view or synthetic settings in which such methods are often
+developed:
+\begin{itemize}
+  \item \textbf{Metric but visible-only supervision.} A single sensor measures
+    true metric depth, but only on surfaces it can see; there is no ground truth
+    behind an occluder. Supervision for occluded regions is thus unavailable,
+    and metric (rather than scale-invariant) objectives are appropriate.
+  \item \textbf{Modal, mutually-disjoint instance masks.} Each pixel is assigned
+    to at most one instance, so two occluding people have near-zero mask overlap
+    regardless of how strongly they occlude one another; occlusion must be
+    detected from bounding-box overlap rather than mask intersection.
+  \item \textbf{Per-frame ambiguity and flicker.} Depth is estimated
+    independently per frame, so the depth of static structure can fluctuate
+    across time even when the scene does not move.
+\end{itemize}
+These properties motivate the single-sensor adaptations and the temporal
+extension described in Section~\ref{sec:method}.
 
 \section{Dataset and Annotation Pipeline}
 \label{sec:dataset}
