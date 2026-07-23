@@ -545,10 +545,37 @@ weighted $\mathcal{L}_{\mathrm{tgm}}$.
 
 \section{Experimental Setup}
 \label{sec:setup}
-% Splits, resolutions, training schedules, hardware, and exact configuration
-% profiles. BLOCKED: must match the final resolved code (G0) and state the
-% enhanced-vs-faithful profile per run (G5).
-\emph{[Written in the Experimental-Setup phase.]}
+
+\noindent\textbf{Data and splits.} All experiments use the corpus of
+Section~\ref{sec:dataset} with the video-level split of Table~\ref{tab:dataset}
+($245$ training / $61$ test sequences). Every metric is reported on the
+held-out test split ($10{,}400$ frames); the \emph{occlusion slice}---the
+$3{,}083$ test frames containing at least one pair of overlapping
+instances---is reported separately, as occlusion is where refinement is
+expected to act.
+
+\smallskip\noindent\textbf{Backbones and resolutions.} Stage~1 encodes frames at
+$728\times1288$ (divisible by the ViT patch size) with either a vanilla DINOv2
+ViT-L/14~\cite{oquab2024dinov2} or a Depth-Anything-V2
+encoder~\cite{yang2024depthanythingv2}; Stages~2--3 run a COCO-pretrained Swin-L
+Mask2Former~\cite{cheng2022mask2former,liu2021swin} at $736\times1280$ (divisible
+by the Swin stride). The two resolutions are reconciled through normalized-box
+ROI alignment (Section~\ref{ssec:phase3}), so a shared input size is not
+required.
+
+\smallskip\noindent\textbf{Optimization.} Every stage is trained with
+AdamW under a polynomial learning-rate decay and bfloat16 mixed precision.
+Stage~1 trains the encoder and decoder for $55$k iterations at base learning
+rate $10^{-5}$; Stage~2 fine-tunes the instance decoder for $20$k iterations at
+$10^{-4}$ (its backbone at $0.1\times$); Stage~3 trains the relation head
+$\Phi_o$ for $25$k iterations at $10^{-6}$ with both the Stage-1 depth branch and
+the Stage-2 decoder frozen. The temporal stabilizer is trained separately on
+short clips with the spatial branch frozen (Section~\ref{ssec:temporal}). Unless
+otherwise noted, models use the paper-faithful losses (Eqs.~\eqref{eq:silog},
+\eqref{eq:match}, and \eqref{eq:tgm}); opt-in auxiliary terms are studied in
+Section~\ref{sec:ablation}. The system is implemented in PyTorch.
+% TODO(hardware): state the exact GPU model(s) and count once confirmed
+% (e.g. "trained on a single NVIDIA <model> GPU").
 
 \section{Evaluation Metrics}
 \label{sec:metrics}
