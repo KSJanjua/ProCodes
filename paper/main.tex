@@ -501,11 +501,47 @@ Section~\ref{sec:ablation}, not assumed here.
 
 \subsection{Single-Sensor Adaptations}
 \label{ssec:adapt}
-\emph{[Next step.]}
+The single-sensor, metric setting of Section~\ref{sec:problem} requires three
+adaptations to the reproduced pipeline, which we collect here.
+\emph{(i)~Metric supervision.} All depth losses use the scale-invariant log form
+\emph{without} scale-and-shift alignment (Eq.~\eqref{eq:silog}), because the
+calibrated sensor provides true metric depth that a scale-invariant objective
+would discard. \emph{(ii)~Bounding-box occlusion pairing.} Since the ground-truth
+and hence predicted instance masks are modal and mutually disjoint, occluding
+people have near-zero mask overlap, so occlusion pairs are formed from
+bounding-box rather than mask IoU. \emph{(iii)~Visible-only, non-degrading
+refinement.} A single sensor observes only front surfaces, so the refinement
+loss is masked to the visible pixels of each instance, and the Stage-1 depth
+branch is frozen during refinement so that correcting occluded instances cannot
+degrade the dense map elsewhere. Together these keep the method trainable, and
+the refinement non-degrading, on single-sensor metric data.
 
 \subsection{Temporal-Consistency Extension}
 \label{ssec:temporal}
-\emph{[Next step.]}
+The pipeline so far is per-frame, so the depth of static structure can flicker
+across a video (Section~\ref{sec:problem}). As an optional extension we insert a
+lightweight streaming stabilizer between the Stage-1 decoder and its refinement
+heads: a residual convolutional GRU~\cite{ballas2016convgru} that carries a
+hidden state across frames on a downsampled feature grid, with a zero-initialized
+output projection so that at initialization it is an exact identity and the
+per-frame model is recovered. Its state is reset at sequence boundaries and
+updated once per frame, giving constant memory and unbounded video length.
+
+To reduce flicker without penalizing genuine motion, we train the stabilizer
+with the temporal-gradient-matching (TGM) objective of Video Depth
+Anything~\cite{chen2025vda}, which matches the prediction's frame-to-frame
+log-depth change $\Delta d_t=\log D_t-\log D_{t-1}$ to the ground truth's
+$\Delta d^{*}_t$ rather than warping frames by optical flow:
+\begin{equation}
+\label{eq:tgm}
+\mathcal{L}_{\mathrm{tgm}} = \frac{1}{|\mathcal{V}|}\sum_{p\in\mathcal{V}}
+\big|\,\Delta d_t - \Delta d^{*}_t\,\big|,
+\end{equation}
+over the pixels $\mathcal{V}$ valid in both frames. A prediction that follows the
+ground-truth motion incurs no penalty; only flicker---change the ground truth
+does not exhibit---is penalized. The stabilizer is trained on short clips with
+the spatial branch frozen, under the per-frame loss (Eq.~\eqref{eq:silog}) plus a
+weighted $\mathcal{L}_{\mathrm{tgm}}$.
 
 \section{Experimental Setup}
 \label{sec:setup}
