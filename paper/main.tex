@@ -683,9 +683,59 @@ the refinement stage.
 
 \section{Limitations}
 \label{sec:limitations}
-% Single-sensor visible-only supervision; annotation reliance on model output;
-% modest, dataset-specific gains; no amodal ground truth.
-\emph{[Written in the Limitations phase.]}
+We state the main limitations of this study plainly.
+
+\smallskip\noindent\textbf{Visible-only supervision.}
+A single RGB-D sensor measures depth only on surfaces it can see, so there is no
+ground truth behind an occluder. The occlusion-refinement stage is therefore
+supervised only on visible pixels (Section~\ref{ssec:adapt}), and its
+relative-ordering term relies on the gap between the \emph{visible} depths of
+overlapping instances rather than on true amodal depth. We consequently neither
+supervise nor evaluate amodal (fully occluded) depth; our notion of
+``occlusion-aware'' is confined to ordering the visible surfaces of overlapping
+people consistently.
+
+\smallskip\noindent\textbf{Reliance on automatic annotation.}
+The instance masks, track identities, and per-instance depth layers used for
+both training and evaluation are generated automatically---from a promptable
+video segmenter and the sensor's own depth (Section~\ref{sec:dataset})---rather
+than from human labels. Errors in this pipeline (mask leakage, identity
+switches, depth-layer bias under heavy occlusion) propagate into both the
+targets and the metrics computed against them. A quantitative assessment of
+annotation quality against a manually verified subset is required to bound this
+effect and is not yet part of the study; until it exists, our measurements
+should be read as being against automatically generated, not human, ground
+truth.
+
+\smallskip\noindent\textbf{Narrow domain.}
+The corpus is single-category (\emph{person}), indoor, and concentrated at close
+range, with most instances within $4\,$m (Section~\ref{sec:dataset}). The metric
+objective additionally assumes reliable metric ground truth, which a consumer
+depth sensor does not provide at long range or on specular, transparent, or
+absorptive surfaces; such pixels are removed by the validity mask, which also
+withdraws them from supervision. How the method behaves for other object
+categories, outdoor scenes, wider depth ranges, or other sensors is untested.
+
+\smallskip\noindent\textbf{Single-corpus evaluation.}
+All experiments use the single corpus introduced here; we do not evaluate on an
+external instance-depth benchmark and make no claim of cross-dataset generality
+or state-of-the-art performance. The lack of a standard benchmark for
+single-sensor, metric, occlusion-aware instance depth is part of what motivates
+the dataset, but it does mean our conclusions are specific to this data.
+
+\smallskip\noindent\textbf{Metric caveat.}
+The flicker ratio compares the average frame-to-frame motion of the prediction
+and of the ground truth; because a consumer sensor's depth is itself temporally
+noisy, part of the ground-truth motion is sensor noise rather than true scene
+motion. A flicker ratio below one therefore reflects a mixture of genuine
+over-smoothing and denoising and should be read alongside the TAE, not in
+isolation (Section~\ref{sec:metrics}).
+
+\smallskip\noindent\textbf{Separately trained temporal stage.}
+The temporal stabilizer is an optional module trained with the spatial branch
+frozen rather than optimized jointly end-to-end
+(Section~\ref{ssec:temporal}); a fully joint spatio-temporal model is left to
+future work.
 
 \section{Conclusion}
 \label{sec:conclusion}
