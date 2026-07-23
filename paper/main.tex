@@ -441,7 +441,63 @@ that of Eq.~\eqref{eq:depthlayer}.
 
 \subsection{Occlusion-Aware Refinement}
 \label{ssec:phase3}
-\emph{[Next step.]}
+The final stage corrects instance depths where people overlap. Following
+InstanceDepth~\cite{liang2025instancedepth}, it (i) selects confident candidate
+instances, (ii) forms occluder--occludee pairs, (iii) extracts paired evidence
+by ROI alignment, and (iv) predicts a per-instance depth correction with a
+relation-reasoning head.
+
+\smallskip\noindent\textbf{Candidates and pairs.}
+From the Stage-2 predictions we keep instances whose category and mask
+confidences exceed $0.9$ and $0.8$~\cite{liang2025instancedepth}, and pair each
+with its most-overlapping neighbour, ordering the pair so that the nearer
+instance (the occluder) is first. \emph{Adaptation.} Because our ground-truth
+masks are modal and mutually disjoint (Section~\ref{sec:problem}), two occluding
+people have near-zero \emph{mask} overlap; we therefore detect overlap by
+\emph{bounding-box} IoU (threshold $0.1$) rather than mask IoU.
+
+\smallskip\noindent\textbf{Relation reasoning.}
+For each pair, multi-scale depth features $F_{\mathrm{obj}}$ and geometric priors
+$G_{\mathrm{obj}}$ (mask logits, normalized coordinates, and the base depth) are
+extracted by ROI alignment~\cite{he2017maskrcnn} into a common grid, and a
+relation head $\Phi_o$ predicts a bounded relative error that rescales the base
+depth $D_{\mathrm{obj}}$ (Eq.~8--9 of~\cite{liang2025instancedepth}):
+\begin{align}
+\label{eq:eobj}
+E_{\mathrm{obj}} &= \sigma\big(\Phi_o([F_{\mathrm{obj}}, G_{\mathrm{obj}}])\big),\\
+\hat D_{\mathrm{obj}} &= (2E_{\mathrm{obj}}-1)\,D_{\mathrm{obj}} + D_{\mathrm{obj}}.
+\end{align}
+Because $\Phi_o$ receives both members of a pair, each instance's correction is
+conditioned on its partner. As $E_{\mathrm{obj}}=\tfrac12$ gives
+$\hat D_{\mathrm{obj}}=D_{\mathrm{obj}}$, the stage is initialized to the
+identity.
+
+\smallskip\noindent\textbf{Losses.}
+The refined depths are supervised by a scale-invariant term and a
+relative-ordering term (Eq.~10--12 of~\cite{liang2025instancedepth}):
+\begin{align}
+\mathcal{L}_{\mathrm{obj}} &= \mathrm{SILog}(\hat D_{\mathrm{obj}}, D^{*}_{\mathrm{obj}}),\\
+\mathcal{L}_{\mathrm{dist}} &= \sum_{i\neq j}\big\lVert(\hat D_i-\hat D_j)^2-(D^{*}_i-D^{*}_j)^2\big\rVert,\\
+\mathcal{L}_{\mathrm{ref}} &= \lambda_1\mathcal{L}_{\mathrm{obj}} + \lambda_2\mathcal{L}_{\mathrm{dist}}.
+\end{align}
+\emph{Adaptation.} A single sensor has no ground truth behind an occluder, so
+$\mathcal{L}_{\mathrm{obj}}$ is evaluated only on the \emph{visible} pixels of
+each matched instance; the relative term $\mathcal{L}_{\mathrm{dist}}$ pins the
+depth gap between occluder and occludee to the ground-truth gap.
+\emph{Non-degrading design.} We keep the Stage-1 depth branch \emph{frozen}
+during refinement, so the dense map outside refined instances is left unchanged;
+combined with the identity initialization, the stage can only alter the paired
+instances and cannot degrade the base depth by construction.
+
+\smallskip\noindent\textbf{Bounded pair-attention head (extension).}
+We additionally study a variant of $\Phi_o$ that replaces its $1{\times}1$
+convolutions with a small cross-attention encoder---so each instance's ROI
+tokens attend to its partner's---and bounds the correction as
+$\hat D_{\mathrm{obj}}=(1+c\tanh z)\,D_{\mathrm{obj}}$, limiting the
+multiplicative rescaling to a fixed range $|c|$ rather than the
+$(0,2)$ of Eq.~\eqref{eq:eobj}. It is a drop-in replacement with the same
+interface; whether it improves over the original head is examined in
+Section~\ref{sec:ablation}, not assumed here.
 
 \subsection{Single-Sensor Adaptations}
 \label{ssec:adapt}
