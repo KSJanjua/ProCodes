@@ -17,6 +17,8 @@
 \documentclass[sigconf, review=true]{acmart}
 %Do not remove the review=true option for papers submitted for review to ICVGIP2026.
 
+\usepackage{booktabs} % formal tables (ACM style)
+
 \setcopyright{rightsretained}
 
 \acmConference[ICVGIP2026]{17th Indian Conference on Computer Vision, Graphics and Image Processing}{December 21-25, 2026}{Kolkata, India}
@@ -276,14 +278,14 @@ $3{,}083$ contain at least one pair of overlapping instances---the
 (\emph{person}), video-level train/test split.}
 \label{tab:dataset}
 \begin{tabular}{lccc}
-\hline
+\toprule
 Split & Sequences & Frames & Occlusion frames \\
-\hline
+\midrule
 Train & $245$ & $39{,}923$ & --- \\
 Test  & $61$  & $10{,}400$ & $3{,}083$ \\
-\hline
+\midrule
 Total & $306$ & $50{,}323$ & --- \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -357,7 +359,49 @@ explicitly as such.
 
 \subsection{Holistic Depth Initialization}
 \label{ssec:phase1}
-\emph{[Next step.]}
+The first stage predicts a dense metric depth map together with the multi-scale
+depth features reused by the later stages. Following
+InstanceDepth~\cite{liang2025instancedepth}, the frame is encoded by a
+pretrained backbone---in our experiments either a vanilla DINOv2
+ViT-L/14~\cite{oquab2024dinov2} or the depth-fine-tuned encoder of Depth
+Anything~V2~\cite{yang2024depthanythingv2} (compared in
+Section~\ref{sec:ablation})---and a coarse-to-fine, patch-attention
+\emph{depth-range decoder} produces per-level features $F_i$ at increasing
+resolution.
+
+Depth is then obtained by \emph{iterative bin refinement}. The metric range
+$[0,\mathrm{MAX}_d]$ is divided into $r_d$ ordinal bins. Starting from an initial
+estimate $D_0$, each level $i$ predicts a per-bin confidence
+$C_i=\sigma(\Phi_d(F_i,D_i))$ and per-bin ordinal scores $S_i$, combines them
+into a relative error score, and converts it into an additive metric
+correction:
+\begin{align}
+\label{eq:refine}
+R_i &= \sum_{b=0}^{r_d-1} C_{i,b}\,S_{i,b}, \\
+E_i &= 2\,(R_i-1)\,\frac{\mathrm{MAX}_d}{r_d}, \qquad D_{i+1}=D_i+E_i .
+\end{align}
+Iterating across levels yields the dense metric depth $D$; we refer the reader
+to InstanceDepth~\cite{liang2025instancedepth} for the full derivation of the
+decoder and Eq.~\eqref{eq:refine}.
+
+\smallskip\noindent\textbf{Adaptation: metric supervision.}
+Because a single calibrated sensor provides true metric depth, we supervise $D$
+with the scale-invariant logarithmic loss~\cite{eigen2014silog} \emph{without}
+the scale-and-shift alignment used by relative-depth
+methods~\cite{ranftl2022midas,yang2024depthanythingv2}. Writing the per-pixel
+log-error as $\delta=\log D-\log D^{*}$ over the $n$ sensor-valid pixels
+($V_t=1$),
+\begin{equation}
+\label{eq:silog}
+\mathcal{L}_{\mathrm{depth}} =
+\sqrt{\frac{1}{n}\sum \delta^2 \;-\; \lambda\Big(\frac{1}{n}\sum \delta\Big)^2},
+\qquad \lambda=0.5 .
+\end{equation}
+The first term penalizes the magnitude of the log-error while the second removes
+part of the influence of a global scale offset; setting $\lambda<1$ retains the
+metric scale rather than discarding it, which is appropriate here and is
+consistent with the metric depth-layer targets of Eq.~\eqref{eq:depthlayer}. The
+loss is applied with deep supervision across the refinement levels.
 
 \subsection{Instance Depth-Layer Prediction}
 \label{ssec:phase2}
