@@ -125,7 +125,74 @@ enters the manuscript prematurely.]}
 % segmentation (Mask2Former) and video instance segmentation (Mask2Former-VIS,
 % MinVIS); promptable segmentation + tracking (SAM, SAM 2, DEVA); and the
 % instance-level occlusion-aware depth method this work builds on.
-\emph{[Written in the Related Work phase.]}
+
+\paragraph{Monocular and metric depth estimation.}
+Learning-based monocular depth estimation was popularized by Eigen et
+al.~\cite{eigen2014silog}, who introduced a multi-scale network and the
+scale-invariant logarithmic (SILog) loss still widely used today. Subsequent
+work refined the regression objective through ordinal regression over
+discretized depth bins~\cite{fu2018dorn} and the reverse-Huber (berHu)
+loss~\cite{laina2016berhu}. MiDaS~\cite{ranftl2022midas} showed that mixing
+heterogeneous datasets under a scale-and-shift-invariant objective yields
+robust \emph{relative} depth, and DPT~\cite{ranftl2021dpt} replaced
+convolutional decoders with a transformer-based dense-prediction head. More
+recently, self-supervised features from DINOv2~\cite{oquab2024dinov2} and the
+large-scale Depth Anything~V2 model~\cite{yang2024depthanythingv2}, which
+couples a DINOv2 encoder with a DPT head, have become strong monocular-depth
+backbones; we build on these pretrained encoders. Unlike the scale-invariant
+objectives of MiDaS and Depth Anything, our single calibrated RGB-D sensor
+provides true \emph{metric} supervision, so we retain a metric (scale-variant)
+SILog objective throughout.
+
+\paragraph{Temporal consistency in video depth.}
+Per-frame depth models flicker when applied to video. Video Depth
+Anything~\cite{chen2025vda} addresses this for long videos with a
+temporal-gradient-matching (TGM) objective that penalizes only frame-to-frame
+changes absent from the ground truth, thereby avoiding the moving-object bias
+of optical-flow warping losses~\cite{teed2020raft}. Recurrent operators such as
+the convolutional GRU~\cite{ballas2016convgru} provide streaming,
+constant-memory temporal aggregation. We adopt a lightweight streaming ConvGRU
+stabilizer trained with a TGM objective as an optional extension to the
+otherwise per-frame pipeline we study.
+
+\paragraph{Instance and video instance segmentation.}
+Query-based set prediction, introduced for detection by
+DETR~\cite{carion2020detr}, underpins Mask2Former~\cite{cheng2022mask2former},
+which performs image segmentation with masked attention and bipartite
+(Hungarian) matching, using point-based supervision from
+PointRend~\cite{kirillov2020pointrend} for memory efficiency. Mask2Former was
+extended to video instance segmentation~\cite{cheng2021m2fvis}, and
+MinVIS~\cite{huang2022minvis} showed that per-frame query embeddings are
+already temporally consistent enough to track instances by embedding matching,
+\emph{without} video-specific training. We use a Mask2Former instance decoder
+to predict per-instance masks and depth layers, and adopt MinVIS-style query
+matching for training-free instance identity across frames.
+
+\paragraph{Promptable segmentation and tracking for annotation.}
+Promptable segmentation models---Segment Anything (SAM)~\cite{kirillov2023sam}
+and its video extension SAM~2~\cite{ravi2024sam2}---together with decoupled
+video trackers such as DEVA~\cite{cheng2023deva}, enable scalable, weakly
+supervised generation of masks and temporally consistent identities. We use a
+promptable concept-level video segmenter in this lineage to annotate our
+dataset automatically, replacing manual labeling of instance masks and track
+identities.
+
+% TODO (dataset framing): add a "depth / RGB-D datasets" paragraph positioning
+% the gap our dataset fills (e.g. indoor RGB-D and driving depth benchmarks,
+% and any human-group depth datasets). Deferred until verified dataset
+% citations are added to references.bib -- no fabricated citations.
+
+\paragraph{Instance-level occlusion-aware depth.}
+Closest to our work, InstanceDepth~\cite{liang2025instancedepth} predicts
+instance-level, occlusion-aware depth for groups by combining a holistic
+depth-range initialization, an instance depth-layer decoder, and an
+occlusion-pair relation-reasoning module, evaluated on a group-interaction
+video-depth dataset. Our study adapts this method to a substantially different
+acquisition setting---a \emph{single} calibrated RGB-D sensor capturing
+human-activity scenes---which changes the available supervision (metric depth
+on visible surfaces only, with modal and mutually disjoint instance masks) and
+motivates the dataset, single-sensor adaptations, and temporal extension we
+present.
 
 \section{Dataset and Annotation Pipeline}
 \label{sec:dataset}
