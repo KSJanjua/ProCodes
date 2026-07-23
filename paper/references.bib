@@ -1,0 +1,174 @@
+%==============================================================================
+%  Core bibliography -- works that will be cited regardless of the final
+%  framing (they define the method, backbones, and tools this project uses).
+%
+%  HONESTY NOTE: these are well-known papers and the fields below are given to
+%  the best of current knowledge, but VENUE/YEAR/PAGES must be verified against
+%  each original (e.g. via the ACM DL / CVF / DBLP) before camera-ready. Entries
+%  flagged "% verify" are the ones I am least certain about.
+%==============================================================================
+
+%---- The method this work builds on ------------------------------------------
+@inproceedings{liang2025instancedepth,
+  title     = {Instance-Level Video Depth in Groups Beyond Occlusions},
+  author    = {Liang, and others},   % TODO: complete author list from the paper
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+  year      = {2025}
+}
+
+%---- Monocular / metric depth ------------------------------------------------
+@inproceedings{ranftl2021dpt,
+  title     = {Vision Transformers for Dense Prediction},
+  author    = {Ranftl, Ren{\'e} and Bochkovskiy, Alexey and Koltun, Vladlen},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+  year      = {2021}
+}
+
+@article{ranftl2022midas,
+  title   = {Towards Robust Monocular Depth Estimation: Mixing Datasets for
+             Zero-shot Cross-dataset Transfer},
+  author  = {Ranftl, Ren{\'e} and Lasinger, Katrin and Hafner, David and
+             Schindler, Konrad and Koltun, Vladlen},
+  journal = {IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI)},
+  year    = {2022}
+}
+
+@inproceedings{yang2024depthanythingv2,
+  title     = {Depth Anything V2},
+  author    = {Yang, Lihe and Kang, Bingyi and Huang, Zilong and Zhao, Zhen and
+               Xu, Xiaogang and Feng, Jiashi and Zhao, Hengshuang},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2024}
+}
+
+@inproceedings{chen2025vda,
+  title     = {Video Depth Anything: Consistent Depth Estimation for Super-Long Videos},
+  author    = {Chen, and others},   % TODO: complete author list
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and
+               Pattern Recognition (CVPR)},
+  year      = {2025}                 % verify venue/year
+}
+
+@inproceedings{eigen2014silog,
+  title     = {Depth Map Prediction from a Single Image using a Multi-Scale Deep Network},
+  author    = {Eigen, David and Puhrsch, Christian and Fergus, Rob},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2014}
+}
+
+@inproceedings{fu2018dorn,
+  title     = {Deep Ordinal Regression Network for Monocular Depth Estimation},
+  author    = {Fu, Huan and Gong, Mingming and Wang, Chaohui and
+               Batmanghelich, Kayhan and Tao, Dacheng},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and
+               Pattern Recognition (CVPR)},
+  year      = {2018}
+}
+
+@inproceedings{laina2016berhu,
+  title     = {Deeper Depth Prediction with Fully Convolutional Residual Networks},
+  author    = {Laina, Iro and Rupprecht, Christian and Belagiannis, Vasileios and
+               Tombari, Federico and Navab, Nassir},
+  booktitle = {International Conference on 3D Vision (3DV)},
+  year      = {2016}
+}
+
+%---- Backbones / features ----------------------------------------------------
+@article{oquab2024dinov2,
+  title   = {DINOv2: Learning Robust Visual Features without Supervision},
+  author  = {Oquab, Maxime and Darcet, Timoth{\'e}e and Moutakanni, Th{\'e}o and others},
+  journal = {Transactions on Machine Learning Research (TMLR)},
+  year    = {2024}
+}
+
+@inproceedings{liu2021swin,
+  title     = {Swin Transformer: Hierarchical Vision Transformer using Shifted Windows},
+  author    = {Liu, Ze and Lin, Yutong and Cao, Yue and Hu, Han and Wei, Yixuan and
+               Zhang, Zheng and Lin, Stephen and Guo, Baining},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+  year      = {2021}
+}
+
+%---- Instance / video instance segmentation ----------------------------------
+@inproceedings{cheng2022mask2former,
+  title     = {Masked-attention Mask Transformer for Universal Image Segmentation},
+  author    = {Cheng, Bowen and Misra, Ishan and Schwing, Alexander G. and
+               Kirillov, Alexander and Girdhar, Rohit},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and
+               Pattern Recognition (CVPR)},
+  year      = {2022}
+}
+
+@article{cheng2021m2fvis,
+  title   = {Mask2Former for Video Instance Segmentation},
+  author  = {Cheng, Bowen and Choudhuri, Anwesa and Misra, Ishan and
+             Schwing, Alexander and Girdhar, Rohit and Kirillov, Alexander},
+  journal = {arXiv preprint arXiv:2112.10764},
+  year    = {2021}
+}
+
+@inproceedings{huang2022minvis,
+  title     = {MinVIS: A Minimal Video Instance Segmentation Framework without
+               Video-based Training},
+  author    = {Huang, De-An and Yu, Zhiding and Anandkumar, Anima},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2022}
+}
+
+@inproceedings{kirillov2020pointrend,
+  title     = {PointRend: Image Segmentation as Rendering},
+  author    = {Kirillov, Alexander and Wu, Yuxin and He, Kaiming and Girshick, Ross},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and
+               Pattern Recognition (CVPR)},
+  year      = {2020}
+}
+
+@inproceedings{carion2020detr,
+  title     = {End-to-End Object Detection with Transformers},
+  author    = {Carion, Nicolas and Massa, Francisco and Synnaeve, Gabriel and
+               Usunier, Nicolas and Kirillov, Alexander and Zagoruyko, Sergey},
+  booktitle = {European Conference on Computer Vision (ECCV)},
+  year      = {2020}
+}
+
+%---- Promptable segmentation + tracking (annotation pipeline) -----------------
+@inproceedings{kirillov2023sam,
+  title     = {Segment Anything},
+  author    = {Kirillov, Alexander and Mintun, Eric and Ravi, Nikhila and others},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+  year      = {2023}
+}
+
+@article{ravi2024sam2,
+  title   = {SAM 2: Segment Anything in Images and Videos},
+  author  = {Ravi, Nikhila and Gabeur, Valentin and Hu, Yuan-Ting and others},
+  journal = {arXiv preprint arXiv:2408.00714},
+  year    = {2024}                    % verify venue (ICLR 2025?)
+}
+% SAM3: the annotation backend used in this project. TODO: add an authoritative
+% citation once available; if unpublished, describe as the tool used rather
+% than cite.
+
+@inproceedings{cheng2023deva,
+  title     = {Tracking Anything with Decoupled Video Segmentation},
+  author    = {Cheng, Ho Kei and Oh, Seoung Wug and Price, Brian and
+               Lee, Joon-Young and Schwing, Alexander},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+  year      = {2023}
+}
+
+%---- Temporal / recurrent components -----------------------------------------
+@inproceedings{ballas2016convgru,
+  title     = {Delving Deeper into Convolutional Networks for Learning Video
+               Representations},
+  author    = {Ballas, Nicolas and Yao, Li and Pal, Chris and Courville, Aaron},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2016}
+}
+
+@inproceedings{teed2020raft,
+  title     = {RAFT: Recurrent All-Pairs Field Transforms for Optical Flow},
+  author    = {Teed, Zachary and Deng, Jia},
+  booktitle = {European Conference on Computer Vision (ECCV)},
+  year      = {2020}
+}
