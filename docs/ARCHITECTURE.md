@@ -83,7 +83,7 @@ Run once, offline. Produces the GID-style annotations every phase consumes.
 
 ```mermaid
 flowchart TB
-    CAM([ZED stereo camera<br/>297 sequences · ~55k frames<br/>720×1280 · 50–300 frames/seq]):::io
+    CAM([ZED stereo camera<br/>306 sequences · 50,323 frames<br/>720×1280 · mean 164 frames/seq]):::io
     CAM --> RGBF[/"RGB frames"/]:::io
     CAM --> DEPTHF[/"Depth maps<br/>metric metres, 0 = invalid"/]:::io
 

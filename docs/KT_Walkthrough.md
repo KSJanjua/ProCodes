@@ -450,7 +450,7 @@ finally:
     segmenter.close()                                 # always freed, even on error
 ```
 
-**Example.** ~297 sequences across 10 batches → ~238 train / ~59 test (≈20%, drawn evenly
+**Example.** 306 sequences across the batches → 245 train / 61 test (≈20%, drawn evenly
 from every batch). `meta.json` reports object counts per depth bucket, total frames, average
 objects per frame, etc.
 
@@ -935,7 +935,7 @@ paper-faithful configuration and are enabled only in the enhanced profile.
 - **`inference.py` (`HDIInferencer`)** loads a checkpoint once, then `predict(rgb)` per
   frame: it normalizes exactly like the training dataset, runs the model at
   `cfg.data.image_size`, then resizes depth back to the caller's original resolution. Phase
-  2/3 consume Phase 1 features in-process this way (caching features for ~55k frames would
+  2/3 consume Phase 1 features in-process this way (caching features for ~50k frames would
   be hundreds of GB).
 - **`train_hdi.py`** wires the `GIDInstanceDepthDataset` (the data engine's output) into a
   DataLoader, defines one training step (move batch to GPU → `model(image)` → `HDILoss`),

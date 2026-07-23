@@ -246,7 +246,79 @@ extension described in Section~\ref{sec:method}.
 % The single-sensor RGB-D human-activity capture, statistics, and the automatic
 % instance/depth-layer annotation pipeline. BLOCKED: any quality/quantitative
 % claim requires G1 (manual annotation validation).
-\emph{[Written in the Dataset phase.]}
+
+\subsection{Acquisition}
+Our data are captured with a single calibrated ZED stereo RGB-D sensor in
+indoor human-activity scenes. The corpus comprises $306$ video sequences
+($50{,}323$ frames at $720\times1280$; mean $164.5$ frames per sequence),
+each providing time-synchronized RGB and metric depth. All instances belong to
+a single category, \emph{person}, and depth is used within the sensor's
+reliable metric range $[0.01,10]\,$m. We split the corpus at the \emph{video}
+level into $245$ training and $61$ test sequences ($19.9\%$ test), stratified by
+capture batch and drawn with a fixed seed, so that every recording condition
+appears in both splits and no frames of a sequence are shared across the split
+(Table~\ref{tab:dataset}). The test split contains $10{,}400$ frames, of which
+$3{,}083$ contain at least one pair of overlapping instances---the
+\emph{occlusion slice} used in Section~\ref{sec:results}.
+
+\begin{table}[t]
+\centering
+\caption{Dataset summary. Single-sensor RGB-D, single category
+(\emph{person}), video-level train/test split.}
+\label{tab:dataset}
+\begin{tabular}{lccc}
+\toprule
+Split & Sequences & Frames & Occlusion frames \\
+\midrule
+Train & $245$ & $39{,}923$ & --- \\
+Test  & $61$  & $10{,}400$ & $3{,}083$ \\
+\midrule
+Total & $306$ & $50{,}323$ & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Automatic annotation}
+The sensor supplies RGB and metric depth but not the instance-level labels the
+method requires, so we generate them automatically.
+\emph{(i)~Masks and identities.} A promptable, concept-level video segmentation
+model in the Segment-Anything lineage~\cite{kirillov2023sam,ravi2024sam2} is
+prompted with the concept \emph{person} and propagated across each sequence,
+yielding a mask and a provisional identity for every person in every frame;
+this replaces the conventional two-stage mask-plus-tracker pipeline
+(e.g.\ SAM followed by DEVA~\cite{cheng2023deva}) with a single pass.%
+\footnote{Implementation uses a concept-prompted video segmenter; the exact
+model and citation are finalized for the camera-ready.}
+\emph{(ii)~Identity consolidation.} Provisional tracks are consolidated by
+removing cross-prompt duplicate masks by intersection-over-union (IoU),
+re-linking a track that ends to one that begins within a short temporal gap
+when their boundary masks agree in IoU (a highest-IoU identity-consistency
+rule), and discarding tracks shorter than a minimum length.
+\emph{(iii)~Depth layers.} For each instance we compute the ground-truth depth
+layer of Eq.~\eqref{eq:depthlayer}: the mean metric depth over its visible,
+sensor-valid pixels.
+\emph{(iv)~Single-label maps.} Masks are rasterized into one $16$-bit identity
+image per frame; where instances overlap, each contested pixel is assigned to
+the instance with the smaller depth layer (the nearer, occluding surface),
+while the per-instance depth layers are computed from each instance's full mask
+\emph{before} this resolution so that a partially occluded instance's depth is
+not biased. A ground/floor mask is additionally produced by the same segmenter
+for optional auxiliary supervision.
+
+\subsection{Statistics}
+On average a frame contains $2.34$ people. Per-instance depths concentrate at
+close range: the large majority of instances lie within $0$--$4\,$m
+($67{,}778$ within $0$--$2\,$m and $16{,}105$ within $2$--$4\,$m), with a
+smaller tail toward $10\,$m ($1{,}948$; $2{,}705$; and $4{,}208$ instances in
+the $4$--$6$, $6$--$8$, and $8$--$10\,$m ranges respectively).
+% TODO(figure): depth-range histogram + per-video (objects, length) scatter,
+% analogous to prior group-depth datasets, once the plotting run is committed.
+
+% VALIDATION (blocked on gate G1): a quantitative annotation-quality assessment
+% -- mask IoU and per-instance depth-layer error against MANUAL ground truth on
+% a hand-checked subset of ~150--300 frames -- is REQUIRED before any claim
+% about annotation quality or the depth-layer MAE metric. Deliberately NOT
+% written until that experiment exists; no placeholder numbers.
 
 \section{Method}
 \label{sec:method}
